@@ -77,6 +77,8 @@ WSGI_APPLICATION = 'pogoda_api.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
+
+"""
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.mysql',
@@ -85,6 +87,14 @@ DATABASES = {
         'PASSWORD': os.getenv("DB_PASSWORD"),
         'HOST': os.getenv("DB_HOST"),
         'PORT': '3306',
+    }
+}
+"""
+
+DATABASES = {
+    'default': {
+        'ENGINE': 'django.db.backends.sqlite3', # Zmienione na SQLite
+        'NAME': BASE_DIR / 'db.sqlite3',       # Domyślna ścieżka do pliku
     }
 }
 
