@@ -1,7 +1,7 @@
 # pogoda/views.py
 
 from django.shortcuts import render, get_object_or_404
-from .models import WeatherData, City
+from .models import WeatherData, City, HistoricalWeatherData
 from django.db.models import Max
 from django.shortcuts import redirect
 from .utils import fetch_and_save_weather_data
@@ -48,3 +48,20 @@ def city_detail(request, city_name):
     }
 
     return render(request, 'city_detail.html', context)
+
+def historical_weather_list(request):
+    cities = City.objects.all()  # lista miast
+    selected_city = request.GET.get("city")  # pobieramy miasto z query param, np. ?city=Warsaw
+
+    if selected_city:
+        data = HistoricalWeatherData.objects.filter(city__name=selected_city).order_by('-date')
+    else:
+        data = HistoricalWeatherData.objects.all().order_by('-date')
+
+    context = {
+        "cities": cities,
+        "data": data,
+        "selected_city": selected_city
+    }
+    return render(request, "historical_weather.html", context)
+

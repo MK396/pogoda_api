@@ -6,8 +6,10 @@ import requests_cache
 import pytz
 from datetime import datetime
 from django.db import IntegrityError
-from .models import City, WeatherData  # Importujemy oba nowe modele
-
+from .models import City, WeatherData, HistoricalWeatherData  # Importujemy oba nowe modele
+from datetime import datetime, timedelta
+from calendar import monthrange
+import requests
 
 def fetch_and_save_weather_data():
     """
@@ -69,3 +71,70 @@ def fetch_and_save_weather_data():
 # python manage.py shell
 # >>> from pogoda.utils import fetch_and_save_weather_data
 # >>> fetch_and_save_weather_data()
+
+def fetch_and_save_historical_weather_monthly_requests(city, start_date, end_date):
+    """
+    Pobiera dane historyczne z Open-Meteo przy użyciu requests (JSON),
+    agreguje je miesięcznie i zapisuje do HistoricalWeatherData.
+    """
+    today = datetime.now().date()
+    if end_date > today:
+        end_date = today
+
+    current_date = start_date
+
+    while current_date <= end_date:
+        last_day = monthrange(current_date.year, current_date.month)[1]
+        month_end = min(datetime(current_date.year, current_date.month, last_day).date(), end_date)
+
+        url = "https://archive-api.open-meteo.com/v1/era5"
+        params = {
+            "latitude": city.latitude,
+            "longitude": city.longitude,
+            "start_date": current_date.strftime("%Y-%m-%d"),
+            "end_date": month_end.strftime("%Y-%m-%d"),
+            "daily": "temperature_2m_max,temperature_2m_min,precipitation_sum,windspeed_10m_max",
+            "timezone": "Europe/Warsaw",
+            "format": "json"
+        }
+
+        try:
+            r = requests.get(url, params=params, timeout=30)
+            r.raise_for_status()
+            data = r.json()
+            daily = data.get("daily", {})
+
+            dates = daily.get("time", [])
+            temps_max = daily.get("temperature_2m_max", [])
+            temps_min = daily.get("temperature_2m_min", [])
+            precip = daily.get("precipitation_sum", [])
+            wind = daily.get("windspeed_10m_max", [])
+
+            if not dates:
+                print(f"❌ Brak danych dla {city.name} od {current_date} do {month_end}")
+            else:
+                temps = [(temps_max[i] + temps_min[i]) / 2 for i in range(len(dates))]
+                avg_temp = sum(temps) / len(temps)
+                avg_precipitation = sum(precip) / len(dates)
+                avg_wind = sum(wind) / len(dates)
+
+                try:
+                    HistoricalWeatherData.objects.create(
+                        city=city,
+                        temperature=avg_temp,
+                        date=datetime(current_date.year, current_date.month, 1).date(),
+                        precipitation=avg_precipitation,
+                        wind_speed=avg_wind
+                    )
+                    print(f"✅ Zapisano {city.name} - {current_date.year}-{current_date.month}: {avg_temp:.2f}°C")
+                except IntegrityError:
+                    print(f"❌ Rekord już istnieje: {city.name} - {current_date.year}-{current_date.month}")
+
+        except Exception as e:
+            print(f"❌ Błąd dla {city.name} od {current_date} do {month_end}: {e}")
+
+        # Przechodzimy do następnego miesiąca
+        if current_date.month == 12:
+            current_date = datetime(current_date.year + 1, 1, 1).date()
+        else:
+            current_date = datetime(current_date.year, current_date.month + 1, 1).date()

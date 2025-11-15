@@ -48,3 +48,19 @@ class WeatherData(models.Model):
         # Sortowanie po czasie, aby najnowsze dane były na górze
         ordering = ['-timestamp']
         db_table = 'pogoda_data'  # Nowa nazwa dla tabeli danych, aby była jasna
+
+
+class HistoricalWeatherData(models.Model):
+    city = models.ForeignKey(City, on_delete=models.CASCADE, related_name='historical_readings')
+    temperature = models.FloatField()
+    date = models.DateField()  # pierwszy dzień miesiąca
+    precipitation = models.FloatField(null=True, blank=True)
+    wind_speed = models.FloatField(null=True, blank=True)
+
+    class Meta:
+        unique_together = ('city', 'date')
+        ordering = ['-date']
+        db_table = 'pogoda_historical'
+
+    def __str__(self):
+        return f"{self.city.name}: {self.temperature}°C ({self.date})"

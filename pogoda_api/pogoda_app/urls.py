@@ -8,4 +8,5 @@ urlpatterns = [
     # 2. Nowa strona z historią pogody dla danego miasta
     # <str:city_name> przechwyci to, co jest w URL, jako zmienną city_name
     path('history/<str:city_name>/', views.city_detail, name='city_detail'),
+    path('historical/', views.historical_weather_list, name="historical_weather"),
 ]

@@ -9,8 +9,12 @@
 
     <h2>Bajerow w bazie: {{ count }}</h2>
 
-    <form action="{% url 'fetch_weather' %}" method="get">
+    <form action="{% url 'fetch_weather' %}" method="get" style="display: inline;">
         <button type="submit">Pobierz aktualną pogodę ☀️</button>
+    </form>
+
+    <form action="{% url 'historical_weather' %}" method="get" style="display: inline;">
+        <button type="submit">Dane historyczne 🌡️</button>
     </form>
 
 
