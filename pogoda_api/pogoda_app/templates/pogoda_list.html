@@ -5,9 +5,10 @@
     <title>Aktualna Pogoda</title>
 </head>
 <body>
+
     <h1>☀️ Aktualna Pogoda w Polsce</h1>
 
-    <h2>Bajerow w bazie: {{ count }}</h2>
+    <h2>Bajerów w bazie: {{ count }}</h2>
 
     <form action="{% url 'fetch_weather' %}" method="get" style="display: inline;">
         <button type="submit">Pobierz aktualną pogodę ☀️</button>
@@ -17,13 +18,14 @@
         <button type="submit">Dane historyczne 🌡️</button>
     </form>
 
-
     {% if weather_data %}
         <table border="1" cellpadding="10" cellspacing="0">
             <thead>
                 <tr>
                     <th>Miasto</th>
                     <th>Temperatura (°C)</th>
+                    <th>Opady (mm)</th>
+                    <th>Wiatr (m/s)</th>
                     <th>Ostatnia Aktualizacja</th>
                 </tr>
             </thead>
@@ -31,12 +33,28 @@
                 {% for item in weather_data %}
                 <tr>
                     <td>
-    <a href="{% url 'city_detail' city_name=item.city.name %}">
-        **{{ item.city.name }}**
-    </a>
+                        <a href="{% url 'city_detail' city_name=item.city.name %}">
+                            <strong>{{ item.city.name }}</strong>
+                        </a>
                     </td>
 
                     <td>{{ item.temperature|floatformat:1 }}</td>
+
+                    <td>
+                        {% if item.precipitation != None %}
+                            {{ item.precipitation|floatformat:1 }}
+                        {% else %}
+                            -
+                        {% endif %}
+                    </td>
+
+                    <td>
+                        {% if item.wind_speed != None %}
+                            {{ item.wind_speed|floatformat:1 }}
+                        {% else %}
+                            -
+                        {% endif %}
+                    </td>
 
                     <td>{{ item.timestamp|date:"Y-m-d H:i" }}</td>
                 </tr>
@@ -44,7 +62,7 @@
             </tbody>
         </table>
     {% else %}
-        <p>Brak dostępnych danych pogodowych (Instrukcja 'if' jest fałszywa).</p>
+        <p>Brak dostępnych danych pogodowych.</p>
     {% endif %}
 
 </body>

@@ -39,7 +39,7 @@ def fetch_and_save_weather_data():
         params = {
             "latitude": city_obj.latitude,
             "longitude": city_obj.longitude,
-            "current": "temperature_2m",
+            "current": "temperature_2m,precipitation,windspeed_10m",
             # Dodaj inne parametry, jeśli są potrzebne (np. wilgotność, wiatr)
         }
 
@@ -49,16 +49,20 @@ def fetch_and_save_weather_data():
             response = responses[0]
             current = response.Current()
             temp = current.Variables(0).Value()
+            precipitation = current.Variables(1).Value()
+            wind_speed = current.Variables(2).Value()
 
             # 4. Zapis nowego odczytu do bazy Django (model WeatherData)
             # Tworzymy nowy rekord dla każdego odczytu
             WeatherData.objects.create(
                 city=city_obj,
                 temperature=temp,
+                precipitation=precipitation,
+                wind_speed=wind_speed,
                 timestamp=czas_pl
             )
 
-            print(f"  ✅ Zapisano: {city_obj.name} ({temp}°C)")
+            print(f"  ✅ {city_obj.name} | {temp}°C | opady: {precipitation} mm | wiatr: {wind_speed} m/s")
 
         except IntegrityError:
             print(f"  ❌ Błąd integralności danych dla {city_obj.name}.")

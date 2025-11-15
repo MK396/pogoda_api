@@ -17,13 +17,35 @@
                 <tr>
                     <th>Data i Godzina</th>
                     <th>Temperatura (°C)</th>
+                    <th>Opady (mm)</th>
+                    <th>Wiatr (m/s)</th>
                 </tr>
             </thead>
             <tbody>
                 {% for reading in history %}
                 <tr>
                     <td>{{ reading.timestamp|date:"Y-m-d H:i:s" }}</td>
-                    <td style="font-weight: bold;">{{ reading.temperature|floatformat:1 }}</td>
+
+                    <td style="font-weight: bold;">
+                        {{ reading.temperature|floatformat:1 }}
+                    </td>
+
+                    <td>
+                        {% if reading.precipitation != None %}
+                            {{ reading.precipitation|floatformat:1 }}
+                        {% else %}
+                            -
+                        {% endif %}
+                    </td>
+
+                    <td>
+                        {% if reading.wind_speed != None %}
+                            {{ reading.wind_speed|floatformat:1 }}
+                        {% else %}
+                            -
+                        {% endif %}
+                    </td>
+
                 </tr>
                 {% endfor %}
             </tbody>

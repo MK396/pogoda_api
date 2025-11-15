@@ -44,9 +44,9 @@
             <tr>
                 <td>{{ record.city.name }}</td>
                 <td>{{ record.date|date:"Y-m" }}</td>
-                <td>{{ record.temperature|floatformat:2 }}</td>
-                <td>{{ record.precipitation|floatformat:2 }}</td>
-                <td>{{ record.wind_speed|floatformat:2 }}</td>
+                <td>{{ record.temperature|floatformat:1 }}</td>
+                <td>{{ record.precipitation|floatformat:1 }}</td>
+                <td>{{ record.wind_speed|floatformat:1 }}</td>
             </tr>
             {% empty %}
             <tr>
