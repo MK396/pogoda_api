@@ -9,6 +9,11 @@
 
     <h2>Bajerow w bazie: {{ count }}</h2>
 
+    <form action="{% url 'fetch_weather' %}" method="get">
+        <button type="submit">Pobierz aktualną pogodę ☀️</button>
+    </form>
+
+
     {% if weather_data %}
         <table border="1" cellpadding="10" cellspacing="0">
             <thead>

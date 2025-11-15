@@ -2,22 +2,28 @@
 
 from django.shortcuts import render, get_object_or_404
 from .models import WeatherData, City
+from django.db.models import Max
+from django.shortcuts import redirect
+from .utils import fetch_and_save_weather_data
 
+def fetch_weather_view(request):
+    """
+    Wywołuje pobranie danych pogodowych i wraca na stronę listy.
+    """
+    fetch_and_save_weather_data()
+    return redirect('pogoda_list')  # przekierowanie na listę miast
 
 # Max już nam niepotrzebny, gdy upraszczamy zapytanie
 
 def pogoda_list(request):
-    """
-    Tymczasowe uproszczenie: Pobierz WSZYSTKIE odczyty, aby sprawdzić,
-    czy w ogóle coś się wyświetli.
-    """
+    # Pobieramy ID najnowszego odczytu dla każdego miasta
+    latest_ids = WeatherData.objects.values('city').annotate(latest_id=Max('id')).values_list('latest_id', flat=True)
 
-    # Pobieramy WSZYSTKIE dane, łącząc je z danymi o miastach
-    latest_weather_data = WeatherData.objects.all().select_related('city').order_by('-timestamp')
+    # Pobieramy te rekordy
+    latest_weather_data = WeatherData.objects.filter(id__in=latest_ids).select_related('city').order_by('-temperature')
 
     context = {
         'weather_data': latest_weather_data,
-        # Dodaj licznik, aby sprawdzić w szablonie, ile rekordów widzi Django
         'count': latest_weather_data.count()
     }
 
