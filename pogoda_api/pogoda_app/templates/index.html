@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <title>Aktualna Pogoda</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+    <style>
+        #map { height: 500px; width: 100%; margin-top: 20px; }
+        table { border-collapse: collapse; width: 100%; margin-top: 20px; }
+        th, td { border: 1px solid #333; padding: 8px; text-align: center; }
+        th { background-color: #4CAF50; color: white; }
+        .city-name { cursor:pointer; color:blue; text-decoration:underline; }
+    </style>
+</head>
+<body>
+
+<h1>☀️ Aktualna Pogoda w Polsce</h1>
+
+<button onclick="loadWeather()">🔄 Odśwież dane pogodowe</button>
+
+<table id="weather-table">
+    <thead>
+        <tr>
+            <th>Miasto</th>
+            <th>Temperatura (°C)</th>
+            <th>Szerokość</th>
+            <th>Długość</th>
+            <th>Ostatnia Aktualizacja</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr><td colspan="5">Ładowanie danych...</td></tr>
+    </tbody>
+</table>
+
+<div id="map"></div>
+
+<!-- kontener na historię -->
+<div id="city-history" style="margin-top:30px;"></div>
+
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+<script>
+
+var map = L.map('map').setView([52.0, 19.0], 6);
+var markers = [];
+
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '&copy; OpenStreetMap contributors'
+}).addTo(map);
+
+var currentCity = null;
+
+function renderWeather(data) {
+    data.sort((a,b) => b.temperature - a.temperature);
+
+    var tbody = document.querySelector("#weather-table tbody");
+    tbody.innerHTML = "";
+
+    markers.forEach(m => map.removeLayer(m));
+    markers = [];
+
+    data.forEach(item => {
+        var row = document.createElement("tr");
+        row.innerHTML = `
+            <td class="city-name">${item.city_name}</td>
+            <td>${item.temperature.toFixed(1)}</td>
+            <td>${item.latitude}</td>
+            <td>${item.longitude}</td>
+            <td>${new Date(item.last_updated).toLocaleString()}</td>
+        `;
+        tbody.appendChild(row);
+
+        row.querySelector(".city-name").addEventListener("click", () => {
+            currentCity = item.city_name;
+            loadCityHistory(item.city_name);
+        });
+
+        var marker = L.marker([item.latitude, item.longitude])
+            .addTo(map)
+            .bindPopup(`<b>${item.city_name}</b><br>Temp: ${item.temperature.toFixed(1)} °C`);
+        marker.on("click", () => {
+            currentCity = item.city_name;
+            loadCityHistory(item.city_name);
+        });
+        markers.push(marker);
+    });
+
+    // jeśli było wybrane miasto, odśwież jego historię
+    if(currentCity){
+        loadCityHistory(currentCity);
+    }
+}
+
+
+function loadWeather() {
+    fetch('/api/pogoda/refresh/')
+        .then(res => res.json())
+        .then(renderWeather)
+        .catch(err => alert("Błąd pobierania danych"));
+}
+
+// pobranie historii dla wybranego miasta
+function loadCityHistory(cityName) {
+    fetch(`/api/pogoda/history/${cityName}/`)
+        .then(res => res.json())
+        .then(data => {
+            let historyHtml = `<h2>Historia pogody dla ${data.city_name}</h2>`;
+            historyHtml += `<table border="1" cellpadding="5" cellspacing="0">
+                <thead>
+                    <tr>
+                        <th>Data</th>
+                        <th>Temperatura (°C)</th>
+                    </tr>
+                </thead>
+                <tbody>`;
+            data.history.forEach(record => {
+                historyHtml += `<tr>
+                    <td>${new Date(record.timestamp).toLocaleString()}</td>
+                    <td>${record.temperature.toFixed(1)}</td>
+                </tr>`;
+            });
+            historyHtml += `</tbody></table>`;
+
+            document.getElementById("city-history").innerHTML = historyHtml;
+        })
+        .catch(err => alert("Nie udało się pobrać historii miasta"));
+}
+
+// pierwsze ładowanie — tylko z bazy
+fetch('/api/pogoda/')
+    .then(res => res.json())
+    .then(renderWeather)
+    .catch(err => console.error(err));
+
+</script>
+
+</body>
+</html>
