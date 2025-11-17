@@ -1,8 +1,8 @@
 # pogoda/views.py
-
+from django.http import JsonResponse
 from django.shortcuts import render, get_object_or_404
 from .models import WeatherData, City, HistoricalWeatherData
-from django.db.models import Max
+from django.db.models import Max, OuterRef, Subquery
 from django.shortcuts import redirect
 from .utils import fetch_and_save_weather_data
 
@@ -64,4 +64,76 @@ def historical_weather_list(request):
         "selected_city": selected_city
     }
     return render(request, "historical_weather.html", context)
+
+
+def latest_weather_list_api(request):
+    """
+    Zwraca najnowsze dane pogodowe dla każdego miasta w formacie JSON.
+    Używa Subquery, aby ominąć ograniczenia DISTINCT ON na SQLite/MySQL.
+    """
+    if request.method == 'GET':
+
+        # 1. Tworzymy subzapytanie, które znajdzie maksymalny (najnowszy) timestamp
+        # dla każdego rekordu w tabeli WeatherData.
+        # OuterRef odnosi się do pola z zewnętrznego zapytania (weatherdata)
+        latest_timestamp = WeatherData.objects.filter(
+            city_id=OuterRef('city_id')
+        ).order_by('-timestamp').values('timestamp')[:1]
+        # Zwraca tylko pole 'timestamp' i tylko pierwszy wynik (najnowszy)
+
+        # 2. Głównym zapytaniem filtrujemy wszystkie rekordy,
+        # gdzie ich timestamp jest RÓWNY najnowszemu timestampowi znalezionemu
+        # przez subzapytanie (dla tego samego miasta).
+        latest_weather_data = WeatherData.objects.filter(
+            timestamp=Subquery(latest_timestamp)
+        ).select_related('city').order_by('city__name')
+
+        # Serializacja danych do formatu JSON
+        data = []
+        for item in latest_weather_data:
+            data.append({
+                'city_name': item.city.name,
+                'latitude': item.city.latitude,
+                'longitude': item.city.longitude,
+                'temperature': item.temperature,
+                'last_updated': item.timestamp.isoformat(),
+            })
+
+        return JsonResponse(data, safe=False)
+
+    return JsonResponse({'error': 'Method not allowed'}, status=405)
+
+
+def city_detail_api(request, city_name):
+    """
+    Zwraca historyczne odczyty dla określonego miasta w formacie JSON.
+    URL: GET /api/pogoda/history/NazwaMiasta/
+    """
+    if request.method == 'GET':
+        try:
+            # 1. Znajdujemy miasto (może użyć get_object_or_404, ale dla API lepiej ręcznie)
+            city = City.objects.get(name__iexact=city_name)  # __iexact ignoruje wielkość liter
+        except City.DoesNotExist:
+            return JsonResponse({'error': f'City "{city_name}" not found'}, status=404)
+
+        # 2. Pobieramy historyczne odczyty
+        historical_readings = city.weather_readings.all().order_by('-timestamp')
+
+        # 3. Serializacja danych
+        data = {
+            'city_name': city.name,
+            'latitude': city.latitude,
+            'longitude': city.longitude,
+            'history': [
+                {
+                    'temperature': reading.temperature,
+                    'timestamp': reading.timestamp.isoformat()
+                }
+                for reading in historical_readings
+            ]
+        }
+
+        return JsonResponse(data)
+
+    return JsonResponse({'error': 'Method not allowed'}, status=405)
 

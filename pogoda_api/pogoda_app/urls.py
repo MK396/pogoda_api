@@ -2,11 +2,12 @@ from django.urls import path
 from . import views
 
 urlpatterns = [
-    # 1. Główna strona z listą aktualnej pogody
-    path('', views.pogoda_list, name='pogoda_list'),
-    path('fetch-weather/', views.fetch_weather_view, name='fetch_weather'),
-    # 2. Nowa strona z historią pogody dla danego miasta
-    # <str:city_name> przechwyci to, co jest w URL, jako zmienną city_name
-    path('history/<str:city_name>/', views.city_detail, name='city_detail'),
-    path('historical/', views.historical_weather_list, name="historical_weather"),
+    # Widok API dla najnowszych danych (GET /api/pogoda/)
+    path('api/pogoda/', views.latest_weather_list_api, name='api_weather_list'),
+
+    # Stary widok dla historii, który zmienimy w następnym kroku
+    path('api/pogoda/history/<str:city_name>/', views.city_detail_api, name='api_city_detail'),
+
+    # Usuń lub zakomentuj starą ścieżkę do pogoda_list
+    # path('', views.pogoda_list, name='pogoda_list'),
 ]
