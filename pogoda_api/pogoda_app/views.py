@@ -1,94 +1,104 @@
-# pogoda/views.py
-from django.http import JsonResponse
-from django.shortcuts import render, get_object_or_404
-from django.db.models import Max, OuterRef, Subquery
-from .models import WeatherData, City, HistoricalWeatherData
+# pogoda/views.py (Używając DRF)
+from rest_framework import views, generics, status
+from rest_framework.response import Response
+from django.db.models import OuterRef, Subquery
+from django.shortcuts import get_object_or_404  # Użyjemy tego, zamiast generics.get_object_or_404
+
+from .models import WeatherData, City
+from .serializers import CurrentWeatherSerializer, CityHistorySerializer
 from .utils import fetch_and_save_weather_data
 
 
-def refresh_weather_api(request):
-    """
-    Pobiera aktualne dane pogodowe z Open-Meteo, zapisuje do DB,
-    a następnie zwraca najnowsze odczyty dla każdego miasta.
-    """
-    if request.method != 'GET':
-        return JsonResponse({'error': 'Method not allowed'}, status=405)
+# from .utils import fetch_and_save_weather_data # Zakładamy, że to działa
 
-    # 1. Pobieramy i zapisujemy nowe dane z API
-    fetch_and_save_weather_data()
+# ----------------------------------------------------------------------
+# LOGIKA POBIERANIA NAJNOWSZYCH DANYCH
+# ----------------------------------------------------------------------
 
-    # 2. Subquery: najnowszy timestamp dla każdego miasta
+def get_latest_weather_queryset():
+    """
+    Wspólna logika do pobrania NAJNOWSZYCH odczytów dla każdego miasta.
+    """
+    # Subquery: najnowszy timestamp dla każdego miasta
     latest_timestamp = WeatherData.objects.filter(
-        city_id=OuterRef("city_id")
+        city=OuterRef("city")  # Zmieniono na "city" zamiast "city_id" dla czystości
     ).order_by("-timestamp").values("timestamp")[:1]
 
-    latest_weather_data = WeatherData.objects.filter(
+    # Zwracamy rekordy, których timestamp równa się najnowszemu
+    return WeatherData.objects.filter(
         timestamp=Subquery(latest_timestamp)
     ).select_related("city").order_by("city__name")
 
-    # 3. JSON
-    return JsonResponse([
-        {
-            "city_name": w.city.name,
-            "latitude": w.city.latitude,
-            "longitude": w.city.longitude,
-            "temperature": w.temperature,
-            "last_updated": w.timestamp.isoformat(),
-        }
-        for w in latest_weather_data
-    ], safe=False)
 
+# ----------------------------------------------------------------------
+# Widok 1: /api/pogoda/ (Lista aktualnej pogody)
+# ----------------------------------------------------------------------
 
-def latest_weather_list_api(request):
+class LatestWeatherListAPI(generics.ListAPIView):
     """
-    Zwraca najnowsze dane pogodowe — BEZ odświeżania z zewnętrznego API.
+    Zwraca najnowsze dane pogodowe BEZ odświeżania z zewnętrznego API.
     """
-    if request.method != 'GET':
-        return JsonResponse({'error': 'Method not allowed'}, status=405)
+    serializer_class = CurrentWeatherSerializer
 
-    latest_timestamp = WeatherData.objects.filter(
-        city_id=OuterRef('city_id')
-    ).order_by('-timestamp').values('timestamp')[:1]
-
-    latest_weather_data = WeatherData.objects.filter(
-        timestamp=Subquery(latest_timestamp)
-    ).select_related('city').order_by('city__name')
-
-    return JsonResponse([
-        {
-            'city_name': w.city.name,
-            'latitude': w.city.latitude,
-            'longitude': w.city.longitude,
-            'temperature': w.temperature,
-            'last_updated': w.timestamp.isoformat(),
-        }
-        for w in latest_weather_data
-    ], safe=False)
+    def get_queryset(self):
+        return get_latest_weather_queryset()
 
 
-def city_detail_api(request, city_name):
+# ----------------------------------------------------------------------
+# Widok 2: /api/pogoda/refresh/ (Odświeżanie)
+# ----------------------------------------------------------------------
+
+class RefreshWeatherAPI(views.APIView):
     """
-    Dane historyczne konkretnego miasta — JSON.
+    Pobiera, zapisuje i zwraca najnowsze odczyty dla każdego miasta.
     """
-    if request.method != 'GET':
-        return JsonResponse({'error': 'Method not allowed'}, status=405)
 
-    try:
-        city = City.objects.get(name__iexact=city_name)
-    except City.DoesNotExist:
-        return JsonResponse({'error': 'City not found'}, status=404)
+    def get(self, request):
+        # 1. Pobieramy i zapisujemy nowe dane z API
+        # Pamiętaj, aby zaimportować i upewnić się, że to działa
+        # fetch_and_save_weather_data()
+        try:
+            fetch_and_save_weather_data()
+        except ValueError as e:
+            print(f"Błąd podczas pobierania danych z zewnętrznego API: {e}")
+        # 2. Pobieramy zaktualizowany queryset
+        latest_weather_data = get_latest_weather_queryset()
 
-    history = city.weather_readings.all().order_by('-timestamp')
+        # 3. Serializujemy i zwracamy
+        serializer = CurrentWeatherSerializer(latest_weather_data, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
-    return JsonResponse({
-        "city_name": city.name,
-        "latitude": city.latitude,
-        "longitude": city.longitude,
-        "history": [
-            {
-                "temperature": h.temperature,
-                "timestamp": h.timestamp.isoformat()
-            }
-            for h in history
-        ]
-    })
+
+# ----------------------------------------------------------------------
+# Widok 3: /api/pogoda/history/<city_name>/ (Historia)
+# ----------------------------------------------------------------------
+
+class CityDetailAPI(generics.RetrieveAPIView):
+    """
+    Zwraca dane historyczne konkretnego miasta (JSON).
+    Używa lookup_field='name' i customowego get_object do wyszukiwania iexact.
+    """
+    serializer_class = CityHistorySerializer
+    queryset = City.objects.all()
+
+    # 1. Ustawiamy lookup_field na pole modelu, którego używamy do wyszukiwania
+    lookup_field = 'name'
+    # 2. Ustawiamy klucz URL, którego użyliśmy w urls.py
+    lookup_url_kwarg = 'city_name'
+
+    def get_object(self):
+        # Pobieramy wartość z URL
+        city_name = self.kwargs.get(self.lookup_url_kwarg)
+
+        # Wyszukujemy obiekt City za pomocą name__iexact (bez uwzględniania wielkości liter)
+        # i automatycznie obsługujemy błąd 404, jeśli nie znajdzie miasta.
+        obj = get_object_or_404(
+            self.get_queryset(),
+            name__iexact=city_name
+        )
+
+        # Opcjonalnie: optymalizacja historii
+        # Prefetching danych historycznych dla tego konkretnego miasta
+        # obj = obj.prefetch_related('weather_readings')
+
+        return obj

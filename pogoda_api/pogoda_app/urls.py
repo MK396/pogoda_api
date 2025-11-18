@@ -1,17 +1,27 @@
-# pogoda/urls.py
+# pogoda/urls.py (Używa widoków z DRF)
 from django.urls import path
-from django.views.generic import TemplateView
-from . import views
+
+# Importujemy klasy widoków z pogoda/views.py
+from .views import (
+    LatestWeatherListAPI,  # Zastępuje latest_weather_list_api
+    RefreshWeatherAPI,     # Zastępuje refresh_weather_api
+    CityDetailAPI          # Zastępuje city_detail_api
+)
 
 urlpatterns = [
-    path('', TemplateView.as_view(template_name='index.html'), name='home'),
+    # USUNIĘCIE: Stary widok TemplateView nie jest już potrzebny,
+    # ponieważ aplikacja React przejmuje routing frontendu.
+    # path('', TemplateView.as_view(template_name='index.html'), name='home'),
 
-    # API — bez odświeżania
-    path('api/pogoda/', views.latest_weather_list_api, name='api_weather_list'),
+    # API 1: Lista aktualnej pogody (z bazy)
+    # Używa: LatestWeatherListAPI.as_view()
+    path('api/pogoda/', LatestWeatherListAPI.as_view(), name='api_weather_list'),
 
-    # API — z odświeżaniem
-    path('api/pogoda/refresh/', views.refresh_weather_api, name='api_weather_refresh'),
+    # API 2: Odświeżanie danych (pobieranie z API + zwracanie najnowszych)
+    # Używa: RefreshWeatherAPI.as_view()
+    path('api/pogoda/refresh/', RefreshWeatherAPI.as_view(), name='api_weather_refresh'),
 
-    # API — dane miasta
-    path('api/pogoda/history/<str:city_name>/', views.city_detail_api, name='api_city_detail'),
+    # API 3: Historia dla konkretnego miasta
+    # Używa: CityDetailAPI.as_view()
+    path('api/pogoda/history/<str:city_name>/', CityDetailAPI.as_view(), name='api_city_detail'),
 ]
