@@ -1,6 +1,8 @@
 // frontend/src/components/WeatherTable.jsx
 import React from 'react';
 
+
+
 const WeatherTable = ({ data, onCityClick }) => {
     return (
         <table id="weather-table">

@@ -26,8 +26,9 @@ a:hover {
 
 body {
   margin: 0;
-  display: flex;
-  place-items: center;
+  /* display: flex; */
+  /* place-items: center; */
+  display: block; /* To sprawi, że elementy będą układać się normalnie od góry */
   min-width: 320px;
   min-height: 100vh;
 }

@@ -1,6 +1,7 @@
 // frontend/src/components/CityHistory.jsx
 import React from 'react';
 
+
 const CityHistory = ({ historyData }) => {
     // Sprawdzamy, czy dane są dostępne i czy istnieje lista historii
     if (!historyData || !historyData.history || historyData.history.length === 0) {

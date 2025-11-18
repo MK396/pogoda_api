@@ -3,6 +3,7 @@ import React from 'react';
 import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
 import L from 'leaflet';
 
+
 // Ważne: Naprawa domyślnych ikon Leaflet, które psują się w React
 delete L.Icon.Default.prototype._getIconUrl;
 
