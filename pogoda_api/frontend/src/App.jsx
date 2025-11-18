@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
 import WeatherTable from './components/WeatherTable';
 import WeatherMap from './components/WeatherMap';
 import CityHistory from './components/CityHistory';
@@ -10,11 +11,8 @@ function App() {
   const [cityHistory, setCityHistory] = useState(null);
   const [currentCity, setCurrentCity] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
-
-  // Stan pomocniczy do śledzenia, czy dane zostały załadowane po raz pierwszy
   const [initialLoad, setInitialLoad] = useState(true);
 
-  // 1. Funkcja do ładowania historii miasta (Bez zmian)
   const loadCityHistory = useCallback(async (cityName) => {
     setCurrentCity(cityName);
     try {
@@ -28,7 +26,6 @@ function App() {
     }
   }, []);
 
-  // 2. Funkcja do ładowania/odświeżania aktualnych danych
   const fetchWeather = useCallback(async (refresh = false) => {
     setIsLoading(true);
     const url = refresh ? `${API_BASE}/refresh/` : API_BASE;
@@ -39,54 +36,61 @@ function App() {
       if (!response.ok) throw new Error('Błąd API Django');
       const data = await response.json();
 
-      // Sortowanie danych
       data.sort((a, b) => b.temperature - a.temperature);
       setWeatherData(data);
       success = true;
-
     } catch (error) {
       console.error("Błąd pobierania danych pogodowych:", error);
       alert("Błąd pobierania danych pogodowych.");
-
     } finally {
       setIsLoading(false);
-      setInitialLoad(false); // Pierwsze ładowanie zakończone
+      setInitialLoad(false);
 
-      // Jeśli sukces, i jest wybrane miasto, odświeżamy jego historię.
-      // Wywołanie musi być tutaj, aby uniknąć zależności currentCity/loadCityHistory
-      // w tablicy zależności fetchWeather.
       if (success && currentCity) {
-          loadCityHistory(currentCity);
+        loadCityHistory(currentCity);
       }
     }
-  }, [currentCity, loadCityHistory]); // Nadal wymaga currentCity, jeśli historia ma się odświeżać
+  }, [currentCity, loadCityHistory]);
 
-  // 3. Efekt do pierwszego ładowania danych
   useEffect(() => {
-    if (initialLoad) {
-        fetchWeather(false);
-    }
-    // Używamy initialLoad jako flagi, aby uruchomić to tylko raz.
+    if (initialLoad) fetchWeather(false);
   }, [fetchWeather, initialLoad]);
 
   return (
-    <div className="weather-app">
-      <h1>☀️ Aktualna Pogoda w Polsce</h1>
+    <Router>
+      <div className="weather-app">
+        <h1>☀️ Aktualna Pogoda w Polsce</h1>
 
-      {/* Przycisk odświeżania */}
-      <button
-        onClick={() => fetchWeather(true)}
-        disabled={isLoading}
-        style={{ padding: '10px 15px', cursor: 'pointer', margin: '10px 0' }}
-      >
-        {isLoading && !initialLoad ? 'Ładowanie...' : '🔄 Odśwież dane pogodowe'}
-      </button>
+        <nav style={{ marginBottom: '15px' }}>
+          <Link to="/" style={{ marginRight: '10px' }}>Tabela</Link>
+          <Link to="/map" style={{ marginRight: '10px' }}>Mapa</Link>
+          <Link to="/historical">Historia</Link>
+        </nav>
 
-      {/* Komponenty */}
-      <WeatherTable data={weatherData} onCityClick={loadCityHistory} isLoading={isLoading} />
-      <WeatherMap data={weatherData} onMarkerClick={loadCityHistory} />
-      {cityHistory && <CityHistory historyData={cityHistory} />}
-    </div>
+        <button
+          onClick={() => fetchWeather(true)}
+          disabled={isLoading}
+          style={{ padding: '10px 15px', cursor: 'pointer', marginBottom: '15px' }}
+        >
+          {isLoading && !initialLoad ? 'Ładowanie...' : '🔄 Odśwież dane pogodowe'}
+        </button>
+
+        <Routes>
+          <Route
+            path="/"
+            element={<WeatherTable data={weatherData} onCityClick={loadCityHistory} />}
+          />
+          <Route
+            path="/map"
+            element={<WeatherMap data={weatherData} onMarkerClick={loadCityHistory} />}
+          />
+          <Route
+            path="/historical"
+            element={cityHistory ? <CityHistory historyData={cityHistory} /> : <p>Wybierz miasto, aby zobaczyć historię.</p>}
+          />
+        </Routes>
+      </div>
+    </Router>
   );
 }
 
