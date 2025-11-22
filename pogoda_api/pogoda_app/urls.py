@@ -26,5 +26,5 @@ urlpatterns = [
     # Używa: CityDetailAPI.as_view()
     path('api/pogoda/history/<str:city_name>/', CityDetailAPI.as_view(), name='api_city_detail'),
 
-    path('api/forecast/<str:city_name>/', HourlyForecastAPI.as_view(), name='api_forecast'),
+    path('api/pogoda/forecast/<str:city_name>/', HourlyForecastAPI.as_view(), name='api_forecast'),
 ]

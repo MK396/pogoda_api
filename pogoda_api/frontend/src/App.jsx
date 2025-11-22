@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route, Link, useNavigate } from 'react
 import WeatherTable from './components/WeatherTable';
 import WeatherMap from './components/WeatherMap';
 import CityHistory from './components/CityHistory';
+import WeatherForecast from './components/WeatherForecast';
 
 const API_BASE = '/api/pogoda';
 
@@ -10,19 +11,22 @@ function App() {
   const [weatherData, setWeatherData] = useState([]);
   const [cityHistory, setCityHistory] = useState(null);
   const [currentCity, setCurrentCity] = useState(null);
+  const [forecastCity, setForecastCity] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [initialLoad, setInitialLoad] = useState(true);
 
-  const navigate = useNavigate();   // <<<<<< TU
+  const navigate = useNavigate();
 
   // ========================
   // Pobieranie historii miasta
   // ========================
-  const loadCityHistory = useCallback(async (cityName) => {
+  const loadCityHistory = useCallback(async (cityName, navigateTo = true) => {
     setCurrentCity(cityName);
+    setForecastCity(cityName);
 
-    // po wybraniu miasta -> idź do widoku historii
-    navigate('/historical');
+    if (navigateTo) {
+      navigate('/historical');
+    }
 
     try {
       const response = await fetch(`${API_BASE}/history/${cityName}/`);
@@ -58,9 +62,9 @@ function App() {
       setIsLoading(false);
       setInitialLoad(false);
 
-      // jeśli było wybrane miasto — odśwież jego historię
+      // jeśli było wybrane miasto – odśwież historię **bez nawigacji**
       if (success && currentCity) {
-        loadCityHistory(currentCity);
+        loadCityHistory(currentCity, false);
       }
     }
   }, [currentCity, loadCityHistory]);
@@ -72,6 +76,8 @@ function App() {
     if (initialLoad) fetchWeather(false);
   }, [fetchWeather, initialLoad]);
 
+  const cityList = weatherData.map(c => c.city_name);
+
   return (
     <div className="weather-app">
       <h1>☀️ Aktualna Pogoda w Polsce</h1>
@@ -79,13 +85,14 @@ function App() {
       <nav style={{ marginBottom: '15px' }}>
         <Link to="/" style={{ marginRight: '10px' }}>Tabela</Link>
         <Link to="/map" style={{ marginRight: '10px' }}>Mapa</Link>
-        <Link to="/historical">Historia</Link>
+        <Link to="/historical" style={{ marginRight: '10px' }}>Historia</Link>
+        <Link to="/forecast">Prognoza</Link>
       </nav>
 
       <button
         onClick={() => fetchWeather(true)}
         disabled={isLoading}
-        style={{ padding: '10px 15px', cursor: 'pointer', marginBottom: '15px' }}
+        style={{ padding: '10px 15px', cursor: "pointer", marginBottom: '15px' }}
       >
         {isLoading && !initialLoad ? 'Ładowanie...' : '🔄 Odśwież dane pogodowe'}
       </button>
@@ -93,26 +100,34 @@ function App() {
       <Routes>
         <Route
           path="/"
-          element={<WeatherTable data={weatherData} onCityClick={loadCityHistory} />}
+          element={<WeatherTable data={weatherData} onCityClick={(city) => loadCityHistory(city)} />}
         />
-
         <Route
           path="/map"
-          element={<WeatherMap data={weatherData} onMarkerClick={loadCityHistory} />}
+          element={<WeatherMap data={weatherData} onMarkerClick={(city) => loadCityHistory(city)} />}
         />
-
         <Route
           path="/historical"
           element={
-            cityHistory ? (
-              <CityHistory
-                historyData={cityHistory}
-                cities={weatherData.map(c => c.city_name)}
-                onCityChange={(city) => loadCityHistory(city)}
-              />
-            ) : (
-              <p>Wybierz miasto, aby zobaczyć historię.</p>
-            )
+            <CityHistory
+              historyData={cityHistory}
+              cities={cityList}
+              onCityChange={(city) => loadCityHistory(city)}
+              currentCity={currentCity}
+            />
+          }
+        />
+        <Route
+          path="/forecast"
+          element={
+            <WeatherForecast
+              city={forecastCity}
+              cities={cityList}
+              onCityChange={(cityName) => {
+                setForecastCity(cityName);
+                setCurrentCity(cityName); // synchronizacja z historią
+              }}
+            />
           }
         />
       </Routes>

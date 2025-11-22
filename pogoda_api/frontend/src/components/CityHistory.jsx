@@ -1,7 +1,6 @@
-// frontend/src/components/CityHistory.jsx
 import React from 'react';
 
-const CityHistory = ({ historyData, cities = [], onCityChange }) => {
+const CityHistory = ({ historyData, cities = [], onCityChange, currentCity }) => {
 
     const handleCitySelect = (e) => {
         if (onCityChange) {
@@ -13,18 +12,20 @@ const CityHistory = ({ historyData, cities = [], onCityChange }) => {
     if (!historyData || !historyData.history || historyData.history.length === 0) {
         return (
             <div id="city-history" style={{ marginTop: '30px' }}>
-                <h2>Historia pogody</h2>
+                <h2>Historia pogody {currentCity ? `dla ${currentCity}` : ''}</h2>
 
                 {/* 🔽 Rozwijana lista miast */}
-                <div style={{ marginBottom: '15px' }}>
-                    <label>Wybierz miasto: </label>
-                    <select onChange={handleCitySelect} defaultValue="">
-                        <option value="" disabled>-- wybierz --</option>
-                        {cities.map((city, index) => (
-                            <option key={index} value={city}>{city}</option>
-                        ))}
-                    </select>
-                </div>
+                {cities.length > 0 && (
+                    <div style={{ marginBottom: '15px' }}>
+                        <label>Wybierz miasto: </label>
+                        <select onChange={handleCitySelect} value={currentCity || ""}>
+                            <option value="" disabled>-- wybierz --</option>
+                            {cities.map((city, index) => (
+                                <option key={index} value={city}>{city}</option>
+                            ))}
+                        </select>
+                    </div>
+                )}
 
                 <p>Brak danych historycznych do wyświetlenia.</p>
             </div>
@@ -38,14 +39,16 @@ const CityHistory = ({ historyData, cities = [], onCityChange }) => {
             <h2>Historia pogody dla {city_name}</h2>
 
             {/* 🔽 Rozwijana lista miast */}
-            <div style={{ marginBottom: '15px' }}>
-                <label>Wybierz miasto: </label>
-                <select onChange={handleCitySelect} value={city_name}>
-                    {cities.map((city, index) => (
-                        <option key={index} value={city}>{city}</option>
-                    ))}
-                </select>
-            </div>
+            {cities.length > 0 && (
+                <div style={{ marginBottom: '15px' }}>
+                    <label>Wybierz miasto: </label>
+                    <select onChange={handleCitySelect} value={city_name || currentCity || ""}>
+                        {cities.map((city, index) => (
+                            <option key={index} value={city}>{city}</option>
+                        ))}
+                    </select>
+                </div>
+            )}
 
             <table border="1" cellPadding="5" cellSpacing="0">
                 <thead>

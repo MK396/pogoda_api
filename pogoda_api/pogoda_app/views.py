@@ -104,25 +104,46 @@ class CityDetailAPI(generics.RetrieveAPIView):
         return obj
 
 # ----------------------------------------------------------------------
-# Widok 4: /api/forecast/<city_name>/ (Prognoza godzinowa)
+# Widok 4: /api/pogoda/forecast/<city_name>/ (Prognoza godzinowa)
 # ----------------------------------------------------------------------
 
 class HourlyForecastAPI(views.APIView):
     """
-    Zwraca prognozę godzinową dla danego miasta (domyślnie 48h)
+    Zwraca prognozę godzinową dla danego miasta (domyślnie 48 godzin).
+    Parametr GET 'hours' może ograniczyć liczbę godzin prognozy.
     """
+
     def get(self, request, city_name):
+        # 1. Pobranie obiektu miasta lub 404
         city = get_object_or_404(City, name__iexact=city_name)
 
-        hours = request.query_params.get("hours", 48)
+        # 2. Odczyt parametru 'hours' z zapytania GET, domyślnie 48
+        hours_param = request.query_params.get("hours", 48)
         try:
-            hours = int(hours)
+            hours = int(hours_param)
+            if hours <= 0:
+                raise ValueError
         except ValueError:
-            hours = 48
+            return Response(
+                {"error": f"Niepoprawny parametr 'hours': {hours_param}. Podaj liczbę całkowitą większą niż 0."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
-        forecast = fetch_hourly_forecast(city, hours=hours)
+        # 3. Pobranie prognozy
+        try:
+            forecast = fetch_hourly_forecast(city, hours=hours)
+        except Exception as e:
+            return Response(
+                {"error": f"Błąd pobierania prognozy: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
-        return Response({
-            "city": city.name,
-            "hourly": forecast
-        }, status=status.HTTP_200_OK)
+        # 4. Zwrócenie danych
+        return Response(
+            {
+                "city": city.name,
+                "hours": hours,
+                "hourly": forecast
+            },
+            status=status.HTTP_200_OK
+        )

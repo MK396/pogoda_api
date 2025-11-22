@@ -143,29 +143,25 @@ def fetch_and_save_historical_weather_monthly_requests(city, start_date, end_dat
         else:
             current_date = datetime(current_date.year, current_date.month + 1, 1).date()
 
-
 def fetch_hourly_forecast(city, hours=48):
     """
-    Pobiera prognozę godzinową dla danego miasta.
-
-    Parametry:
-        city: obiekt City
-        hours: ile godzin prognozy pobrać (domyślnie 48h)
-
-    Zwraca słownik z danymi hourly: time, temperature, precipitation, wind_speed
+    Pobiera prognozę godzinową dla danego miasta od aktualnej godziny.
     """
-    from datetime import datetime, timedelta
     import requests
 
-    # Open-Meteo API
+    # Start od aktualnej godziny w formacie ISO
+    start_time = datetime.now(pytz.timezone("Europe/Warsaw")).replace(minute=0, second=0, microsecond=0)
+    end_time = start_time + timedelta(hours=hours)
+
     url = "https://api.open-meteo.com/v1/forecast"
 
-    # Parametry API
     params = {
         "latitude": city.latitude,
         "longitude": city.longitude,
         "hourly": "temperature_2m,precipitation,wind_speed_10m",
         "timezone": "Europe/Warsaw",
+        "start": start_time.strftime("%Y-%m-%dT%H:%M"),
+        "end": end_time.strftime("%Y-%m-%dT%H:%M"),
     }
 
     try:
@@ -173,12 +169,11 @@ def fetch_hourly_forecast(city, hours=48):
         r.raise_for_status()
         data = r.json()
 
-        # Dane godzinowe
         hourly = data.get("hourly", {})
-        times = hourly.get("time", [])[:hours]
-        temperatures = hourly.get("temperature_2m", [])[:hours]
-        precipitation = hourly.get("precipitation", [])[:hours]
-        wind_speed = hourly.get("wind_speed_10m", [])[:hours]
+        times = hourly.get("time", [])
+        temperatures = hourly.get("temperature_2m", [])
+        precipitation = hourly.get("precipitation", [])
+        wind_speed = hourly.get("wind_speed_10m", [])
 
         forecast_data = []
         for i in range(len(times)):
