@@ -142,3 +142,55 @@ def fetch_and_save_historical_weather_monthly_requests(city, start_date, end_dat
             current_date = datetime(current_date.year + 1, 1, 1).date()
         else:
             current_date = datetime(current_date.year, current_date.month + 1, 1).date()
+
+
+def fetch_hourly_forecast(city, hours=48):
+    """
+    Pobiera prognozę godzinową dla danego miasta.
+
+    Parametry:
+        city: obiekt City
+        hours: ile godzin prognozy pobrać (domyślnie 48h)
+
+    Zwraca słownik z danymi hourly: time, temperature, precipitation, wind_speed
+    """
+    from datetime import datetime, timedelta
+    import requests
+
+    # Open-Meteo API
+    url = "https://api.open-meteo.com/v1/forecast"
+
+    # Parametry API
+    params = {
+        "latitude": city.latitude,
+        "longitude": city.longitude,
+        "hourly": "temperature_2m,precipitation,wind_speed_10m",
+        "timezone": "Europe/Warsaw",
+    }
+
+    try:
+        r = requests.get(url, params=params, timeout=30)
+        r.raise_for_status()
+        data = r.json()
+
+        # Dane godzinowe
+        hourly = data.get("hourly", {})
+        times = hourly.get("time", [])[:hours]
+        temperatures = hourly.get("temperature_2m", [])[:hours]
+        precipitation = hourly.get("precipitation", [])[:hours]
+        wind_speed = hourly.get("wind_speed_10m", [])[:hours]
+
+        forecast_data = []
+        for i in range(len(times)):
+            forecast_data.append({
+                "time": times[i],
+                "temperature": temperatures[i],
+                "precipitation": precipitation[i],
+                "wind_speed": wind_speed[i],
+            })
+
+        return forecast_data
+
+    except Exception as e:
+        print(f"❌ Błąd pobierania prognozy dla {city.name}: {e}")
+        return []

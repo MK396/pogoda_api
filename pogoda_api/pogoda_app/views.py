@@ -6,7 +6,7 @@ from django.shortcuts import get_object_or_404  # Użyjemy tego, zamiast generic
 
 from .models import WeatherData, City
 from .serializers import CurrentWeatherSerializer, CityHistorySerializer
-from .utils import fetch_and_save_weather_data
+from .utils import fetch_and_save_weather_data, fetch_hourly_forecast
 
 
 # from .utils import fetch_and_save_weather_data # Zakładamy, że to działa
@@ -102,3 +102,27 @@ class CityDetailAPI(generics.RetrieveAPIView):
         # obj = obj.prefetch_related('weather_readings')
 
         return obj
+
+# ----------------------------------------------------------------------
+# Widok 4: /api/forecast/<city_name>/ (Prognoza godzinowa)
+# ----------------------------------------------------------------------
+
+class HourlyForecastAPI(views.APIView):
+    """
+    Zwraca prognozę godzinową dla danego miasta (domyślnie 48h)
+    """
+    def get(self, request, city_name):
+        city = get_object_or_404(City, name__iexact=city_name)
+
+        hours = request.query_params.get("hours", 48)
+        try:
+            hours = int(hours)
+        except ValueError:
+            hours = 48
+
+        forecast = fetch_hourly_forecast(city, hours=hours)
+
+        return Response({
+            "city": city.name,
+            "hourly": forecast
+        }, status=status.HTTP_200_OK)

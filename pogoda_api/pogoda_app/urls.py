@@ -4,8 +4,9 @@ from django.urls import path
 # Importujemy klasy widoków z pogoda/views.py
 from .views import (
     LatestWeatherListAPI,  # Zastępuje latest_weather_list_api
-    RefreshWeatherAPI,     # Zastępuje refresh_weather_api
-    CityDetailAPI          # Zastępuje city_detail_api
+    RefreshWeatherAPI,  # Zastępuje refresh_weather_api
+    CityDetailAPI, # Zastępuje city_detail_api
+    HourlyForecastAPI,
 )
 
 urlpatterns = [
@@ -24,4 +25,6 @@ urlpatterns = [
     # API 3: Historia dla konkretnego miasta
     # Używa: CityDetailAPI.as_view()
     path('api/pogoda/history/<str:city_name>/', CityDetailAPI.as_view(), name='api_city_detail'),
+
+    path('api/forecast/<str:city_name>/', HourlyForecastAPI.as_view(), name='api_forecast'),
 ]

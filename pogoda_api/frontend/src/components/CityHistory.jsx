@@ -1,13 +1,31 @@
 // frontend/src/components/CityHistory.jsx
 import React from 'react';
 
+const CityHistory = ({ historyData, cities = [], onCityChange }) => {
 
-const CityHistory = ({ historyData }) => {
-    // Sprawdzamy, czy dane są dostępne i czy istnieje lista historii
+    const handleCitySelect = (e) => {
+        if (onCityChange) {
+            onCityChange(e.target.value); // przekazujemy nazwę miasta do rodzica
+        }
+    };
+
+    // Brak danych lub pusta historia
     if (!historyData || !historyData.history || historyData.history.length === 0) {
         return (
-            <div id="city-history" style={{marginTop: '30px'}}>
-                <h2>Historia pogody dla {historyData?.city_name || 'Wybranego Miasta'}</h2>
+            <div id="city-history" style={{ marginTop: '30px' }}>
+                <h2>Historia pogody</h2>
+
+                {/* 🔽 Rozwijana lista miast */}
+                <div style={{ marginBottom: '15px' }}>
+                    <label>Wybierz miasto: </label>
+                    <select onChange={handleCitySelect} defaultValue="">
+                        <option value="" disabled>-- wybierz --</option>
+                        {cities.map((city, index) => (
+                            <option key={index} value={city}>{city}</option>
+                        ))}
+                    </select>
+                </div>
+
                 <p>Brak danych historycznych do wyświetlenia.</p>
             </div>
         );
@@ -16,22 +34,30 @@ const CityHistory = ({ historyData }) => {
     const { city_name, history } = historyData;
 
     return (
-        <div id="city-history" style={{marginTop: '30px'}}>
+        <div id="city-history" style={{ marginTop: '30px' }}>
             <h2>Historia pogody dla {city_name}</h2>
+
+            {/* 🔽 Rozwijana lista miast */}
+            <div style={{ marginBottom: '15px' }}>
+                <label>Wybierz miasto: </label>
+                <select onChange={handleCitySelect} value={city_name}>
+                    {cities.map((city, index) => (
+                        <option key={index} value={city}>{city}</option>
+                    ))}
+                </select>
+            </div>
+
             <table border="1" cellPadding="5" cellSpacing="0">
                 <thead>
                     <tr>
                         <th>Data</th>
                         <th>Temperatura (°C)</th>
-                        {/* Możesz dodać tu więcej pól, jeśli używasz np. precipitation */}
                     </tr>
                 </thead>
                 <tbody>
                     {history.map((record, index) => (
                         <tr key={record.timestamp || index}>
-                            {/* Wyświetlanie daty i czasu */}
                             <td>{new Date(record.timestamp).toLocaleString()}</td>
-                            {/* Formatowanie temperatury do jednego miejsca po przecinku */}
                             <td>{record.temperature.toFixed(1)}</td>
                         </tr>
                     ))}
