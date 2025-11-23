@@ -39,8 +39,8 @@ def fetch_and_save_weather_data():
         params = {
             "latitude": city_obj.latitude,
             "longitude": city_obj.longitude,
-            "current": "temperature_2m,precipitation,windspeed_10m",
-            # Dodaj inne parametry, jeśli są potrzebne (np. wilgotność, wiatr)
+            # ZAKTUALIZOWANA LISTA ZMIENNYCH
+            "current": "temperature_2m,precipitation,windspeed_10m,relative_humidity_2m",
         }
 
         try:
@@ -51,23 +51,27 @@ def fetch_and_save_weather_data():
             temp = current.Variables(0).Value()
             precipitation = current.Variables(1).Value()
             wind_speed = current.Variables(2).Value()
+            # ODCZYTANIE NOWEGO POLA (index 3)
+            relative_humidity = current.Variables(3).Value()
 
             # 4. Zapis nowego odczytu do bazy Django (model WeatherData)
-            # Tworzymy nowy rekord dla każdego odczytu
             WeatherData.objects.create(
                 city=city_obj,
                 temperature=temp,
                 precipitation=precipitation,
                 wind_speed=wind_speed,
+                # ZAPIS NOWEGO POLA
+                relative_humidity=relative_humidity,
                 timestamp=czas_pl
             )
 
-            print(f"  ✅ {city_obj.name} | {temp}°C | opady: {precipitation} mm | wiatr: {wind_speed} m/s")
+            print(
+                f"  ✅ {city_obj.name} | {temp}°C | opady: {precipitation} mm | "
+                f"wiatr: {wind_speed} m/s | wilgotność: {relative_humidity}%"  # ZAKTUALIZOWANA WIADOMOŚĆ
+            )
 
         except IntegrityError:
             print(f"  ❌ Błąd integralności danych dla {city_obj.name}.")
-        except Exception as e:
-            print(f"  ❌ Błąd podczas pobierania danych dla {city_obj.name}: {e}")
 
     print("--- Zakończono pobieranie danych. ---")
 
@@ -158,7 +162,7 @@ def fetch_hourly_forecast(city, hours=48):
     params = {
         "latitude": city.latitude,
         "longitude": city.longitude,
-        "hourly": "temperature_2m,precipitation,wind_speed_10m",
+        "hourly": "temperature_2m,precipitation,wind_speed_10m,relative_humidity_2m",
         "timezone": "Europe/Warsaw",
         "start": start_time.strftime("%Y-%m-%dT%H:%M"),
         "end": end_time.strftime("%Y-%m-%dT%H:%M"),
@@ -174,6 +178,7 @@ def fetch_hourly_forecast(city, hours=48):
         temperatures = hourly.get("temperature_2m", [])
         precipitation = hourly.get("precipitation", [])
         wind_speed = hourly.get("wind_speed_10m", [])
+        relative_humidity = hourly.get("relative_humidity_2m", [])
 
         forecast_data = []
         for i in range(len(times)):
@@ -182,6 +187,7 @@ def fetch_hourly_forecast(city, hours=48):
                 "temperature": temperatures[i],
                 "precipitation": precipitation[i],
                 "wind_speed": wind_speed[i],
+                "relative_humidity": relative_humidity[i]
             })
 
         return forecast_data

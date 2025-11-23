@@ -16,7 +16,8 @@ class WeatherDetailSerializer(serializers.ModelSerializer):
             'temperature',
             'timestamp',
             'precipitation',  # <--- DODANO
-            'wind_speed'  # <--- DODANO
+            'wind_speed',
+            'relative_humidity'# <--- DODANO
         )
 
 
@@ -33,6 +34,7 @@ class CurrentWeatherSerializer(serializers.ModelSerializer):
     # Dodanie tych pól, aby były dostępne w 'weatherData' dla tabeli i mapy
     precipitation = serializers.FloatField()
     wind_speed = serializers.FloatField()
+    relative_humidity = serializers.FloatField()
 
     class Meta:
         model = WeatherData
@@ -42,8 +44,9 @@ class CurrentWeatherSerializer(serializers.ModelSerializer):
             'longitude',
             'temperature',
             'last_updated',
-            'precipitation',  # <--- DODANO
-            'wind_speed'  # <--- DODANO
+            'precipitation',
+            'wind_speed',
+            'relative_humidity'
         )
 
 

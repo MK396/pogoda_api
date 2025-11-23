@@ -33,6 +33,7 @@ class WeatherData(models.Model):
     temperature = models.FloatField()
     precipitation = models.FloatField(null=True, blank=True)
     wind_speed = models.FloatField(null=True, blank=True)
+    relative_humidity = models.FloatField(null=True, blank=True)
 
     # auto_now_add=True → nadpisywałby ręcznie ustawiany timestamp,
     # dlatego trzeba zmienić na zwykły DateTimeField
@@ -41,9 +42,11 @@ class WeatherData(models.Model):
     def __str__(self):
         return (
             f"{self.city.name}: {self.temperature}°C, "
-            f"opady={self.precipitation} mm, wiatr={self.wind_speed} m/s "
+            f"opady={self.precipitation} mm, wiatr={self.wind_speed} m/s, "
+            f"wilgotność={self.relative_humidity}% "  # Aktualizacja __str__
             f"({self.timestamp.strftime('%Y-%m-%d %H:%M')})"
         )
+    # ...
 
     class Meta:
         ordering = ['-timestamp']
@@ -62,6 +65,7 @@ class HistoricalWeatherData(models.Model):
     date = models.DateField()  # pierwszy dzień miesiąca
     precipitation = models.FloatField(null=True, blank=True)
     wind_speed = models.FloatField(null=True, blank=True)
+    relative_humidity = models.FloatField(null=True, blank=True)
 
     class Meta:
         unique_together = ('city', 'date')
