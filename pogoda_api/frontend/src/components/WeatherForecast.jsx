@@ -15,24 +15,19 @@ import {
 
 const CustomTooltip = ({ active, payload, label, unit }) => {
     if (active && payload && payload.length) {
-        // Nazwa i wartość są w pierwszym elemencie payload, ponieważ jest tylko jedna linia na wykresie
         const dataPoint = payload[0];
 
         return (
             <div style={{
-                // Ustawienie tła na białe z lekką przezroczystością
                 backgroundColor: 'rgba(255, 255, 255, 0.9)',
                 padding: '10px',
                 border: '1px solid #ccc',
-                // ZMIANA: Ustawienie ciemnego koloru tekstu
                 color: '#333',
                 fontSize: '14px',
                 lineHeight: '1.4'
             }}>
-                {/* Nagłówek dymka - Data i godzina */}
                 <p style={{ margin: '0 0 5px 0', fontWeight: 'bold' }}>{`Data i godzina: ${label}`}</p>
 
-                {/* Wartość danych (np. Temperatura: 15.5 °C) */}
                 <p style={{ margin: 0 }}>{`${dataPoint.name}: ${dataPoint.value.toFixed(1)} ${unit}`}</p>
             </div>
         );
@@ -42,9 +37,9 @@ const CustomTooltip = ({ active, payload, label, unit }) => {
 
 const ForecastChart = ({ data, dataKey, name, color, unit }) => (
     <div style={{
-        width: '50%', // Zwiększona szerokość, aby ułożyć 2 wykresy w rzędzie
-        minWidth: '400px', // Zwiększony minimalny rozmiar
-        height: 350, // ZWIĘKSZONA WYSOKOŚĆ
+        width: '50%',
+        minWidth: '400px',
+        height: 350,
         margin: '10px',
         padding: '10px',
         border: '1px solid #ddd',
@@ -69,9 +64,7 @@ const ForecastChart = ({ data, dataKey, name, color, unit }) => (
 
                     <YAxis label={{ value: unit, angle: -90, position: 'insideLeft' }} />
 
-                    <Tooltip
-                        content={<CustomTooltip unit={unit} />}
-                    />
+                    <Tooltip content={<CustomTooltip unit={unit} />} />
 
                     <Legend />
                     <Line
@@ -89,15 +82,12 @@ const ForecastChart = ({ data, dataKey, name, color, unit }) => (
 );
 
 
-const WeatherForecast = ({ city, cities = [], onCityChange }) => {
+const WeatherForecast = ({ city }) => {
     const [data, setData] = useState(null);
     const [loading, setLoading] = useState(false);
-    // PRZYWRÓCONY STAN REKOMENDACJI
     const [recommendation, setRecommendation] = useState(null);
 
-    const handleCitySelect = (e) => {
-        if (onCityChange) onCityChange(e.target.value);
-    };
+    
 
     const fetchForecast = async (selectedCity) => {
         if (!selectedCity) return;
@@ -116,7 +106,6 @@ const WeatherForecast = ({ city, cities = [], onCityChange }) => {
 
             const json = await res.json();
             setData(json.hourly);
-            // PRZYWRÓCONE ZAPISYWANIE REKOMENDACJI
             setRecommendation(json.recommendation);
 
         } catch (error) {
@@ -153,11 +142,13 @@ const WeatherForecast = ({ city, cities = [], onCityChange }) => {
             }))
         : [];
 
+    const currentData = filteredData.length > 0 ? filteredData[0] : null;
+
     return (
         <div id="weather-forecast" style={{ marginTop: "30px" }}>
-            <h2>Prognoza pogody {city ? `dla ${city}` : ""}</h2>
+            <h2>Prognoza pogody dla **{city}**</h2>
 
-            {/* PRZYWRÓCONY DIV Z REKOMENDACJĄ (SMART FEATURE) */}
+            {/* SMART FEATURE: REKOMENDACJA AKTYWNOŚCI */}
             {recommendation && (
                 <div style={{
                     padding: '10px',
@@ -165,35 +156,39 @@ const WeatherForecast = ({ city, cities = [], onCityChange }) => {
                     borderLeft: '5px solid #00bcd4',
                     marginBottom: '20px',
                     fontWeight: 'bold',
-                    color: '#333' // Utrzymujemy ciemny kolor tekstu
+                    color: '#333'
                 }}>
                     {recommendation}
                 </div>
             )}
 
-            {cities.length > 0 && (
-                <div style={{ marginBottom: "15px" }}>
-                    <label>Wybierz miasto: </label>
-                    <select onChange={handleCitySelect} value={city || ""}>
-                        <option value="" disabled>
-                            -- wybierz --
-                        </option>
-                        {cities.map((c, i) => (
-                            <option key={i} value={c}>
-                                {c}
-                            </option>
-                        ))}
-                    </select>
+            {/* AKTUALNA POGODA (na podstawie najbliższego punktu prognozy) */}
+            {currentData && (
+                <div style={{
+                    marginBottom: '30px',
+                    padding: '15px',
+                    border: '1px solid #ccc',
+                    borderRadius: '8px',
+                    backgroundColor: '#f9f9f9',
+                    color: '#333' // Ustawienie ciemnego koloru tekstu dla widoczności
+                }}>
+                    <h3 style={{ margin: '0 0 10px 0', color: '#0056b3' }}>Aktualna Pogoda ({currentData.label})</h3>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '20px' }}>
+                        <p style={{ margin: 0 }}>
+                            **Temperatura:** **{currentData.temperature.toFixed(1)}°C**
+                        </p>
+                        <p style={{ margin: 0 }}>
+                            **Odczuwalna:** **{(currentData.perceived_temperature !== null ? currentData.perceived_temperature : currentData.temperature).toFixed(1)}°C**
+                        </p>
+                        <p style={{ margin: 0 }}>
+                            **Wiatr:** {currentData.wind_speed.toFixed(1)} m/s
+                        </p>
+                        <p style={{ margin: 0 }}>
+                            **Wilgotność:** {currentData.relative_humidity.toFixed(0)}%
+                        </p>
+                    </div>
                 </div>
             )}
-
-            <button
-                onClick={() => fetchForecast(city)}
-                disabled={loading || !city}
-                style={{ padding: "8px 12px", marginBottom: "10px", cursor: "pointer" }}
-            >
-                {loading ? "Ładowanie..." : "Pobierz prognozę godzinową"}
-            </button>
 
             {/* KONTENER DLA CZTERECH POWIĘKSZONYCH WYKRESÓW */}
             {filteredData.length > 0 ? (
@@ -232,7 +227,7 @@ const WeatherForecast = ({ city, cities = [], onCityChange }) => {
                     />
                 </div>
             ) : (
-                !loading && <p>Brak danych dla aktualnej prognozy.</p>
+                !loading && <p>Brak danych dla prognozy.</p>
             )}
         </div>
     );

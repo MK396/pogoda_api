@@ -4,7 +4,7 @@ import WeatherMap from '../components/WeatherMap';
 import WeatherTable from '../components/WeatherTable';
 
 
-const API_URL = "http://127.0.0.1:8000/api/pogoda/";
+const API_URL = "http://127.0.0.1:8000/api/pogoda/refresh";
 
 const HomePage = () => {
     // Stan i logikę pobierania danych przenosimy z App.jsx

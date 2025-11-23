@@ -1,6 +1,7 @@
 # pogoda_app/serializers.py
 from rest_framework import serializers
 from .models import WeatherData, City
+from .utils import calculate_perceived_temp
 
 
 # 1. Serializer dla pojedynczego rekordu historycznego/detalu
@@ -31,6 +32,19 @@ class CurrentWeatherSerializer(serializers.ModelSerializer):
     longitude = serializers.FloatField(source='city.longitude')
     last_updated = serializers.DateTimeField(source='timestamp')
 
+    perceived_temperature = serializers.SerializerMethodField()
+
+    def get_perceived_temperature(self, obj):
+        """Kalkuluje odczuwalną temperaturę na podstawie pól modelu WeatherData."""
+        temp = obj.temperature
+        humidity = obj.relative_humidity
+        wind = obj.wind_speed
+
+        if temp is None:
+            return None
+
+        return calculate_perceived_temp(temp, humidity, wind)  # Użycie nowej funkcji
+
     # Dodanie tych pól, aby były dostępne w 'weatherData' dla tabeli i mapy
     precipitation = serializers.FloatField()
     wind_speed = serializers.FloatField()
@@ -43,6 +57,7 @@ class CurrentWeatherSerializer(serializers.ModelSerializer):
             'latitude',
             'longitude',
             'temperature',
+            'perceived_temperature', # DODANE NOWE POLE DO FIELDS
             'last_updated',
             'precipitation',
             'wind_speed',

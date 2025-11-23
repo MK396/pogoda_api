@@ -226,3 +226,29 @@ def get_activity_recommendation(hourly_forecast):
         return "☔ OSTRZEŻENIE: Możliwe opady lub wiatr w prognozie. Warto mieć przy sobie kurtkę przeciwdeszczową."
     else:
         return "✅ DOBRE WARUNKI: Można planować aktywność na zewnątrz."
+
+
+def calculate_perceived_temp(temp, humidity, wind_speed):
+    """
+    Kalkuluje odczuwalną temperaturę (Perceived Temperature)
+    używając uproszczonych reguł:
+    1. Jeśli temp jest poniżej 10C, używa prostego Wind Chill (wiatr obniża temp.)
+    2. Jeśli temp jest powyżej 25C, używa prostego Heat Index (wilgotność podnosi temp.)
+    3. W przeciwnym razie zwraca temperaturę powietrza.
+    """
+    if temp is None:
+        return None
+
+    # Uproszczona korekta na zimno (Wind Chill):
+    if temp < 10 and  wind_speed > 3:
+        # Uproszczona formuła: obniżenie temp. jest proporcjonalne do prędkości wiatru
+        wind_factor = (wind_speed - 3) * 0.2
+        return temp - wind_factor
+
+    # Uproszczona korekta na gorąco (Heat Index): wilgotność podnosi temperaturę powyżej 25°C
+    if temp > 25 and  humidity > 50:
+        # Uproszczona formuła: podniesienie temp. proporcjonalne do wilgotności
+        humidity_factor = (humidity - 50) / 10 * 0.5
+        return temp + humidity_factor
+
+    return temp

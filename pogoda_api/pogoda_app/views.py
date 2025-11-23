@@ -6,7 +6,8 @@ from django.shortcuts import get_object_or_404  # Użyjemy tego, zamiast generic
 
 from .models import WeatherData, City
 from .serializers import CurrentWeatherSerializer, CityHistorySerializer
-from .utils import fetch_and_save_weather_data, fetch_hourly_forecast, get_activity_recommendation
+from .utils import fetch_and_save_weather_data, fetch_hourly_forecast, get_activity_recommendation, \
+    calculate_perceived_temp
 
 
 # from .utils import fetch_and_save_weather_data # Zakładamy, że to działa
@@ -109,8 +110,7 @@ class CityDetailAPI(generics.RetrieveAPIView):
 
 class HourlyForecastAPI(views.APIView):
     """
-    Zwraca prognozę godzinową dla danego miasta (domyślnie 48 godzin).
-    Parametr GET 'hours' może ograniczyć liczbę godzin prognozy.
+    Zwraca prognozę godzinową dla danego miasta (domyślnie 48 godzin) wraz z obliczoną temperaturą odczuwalną.
     """
 
     def get(self, request, city_name):
@@ -138,14 +138,29 @@ class HourlyForecastAPI(views.APIView):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
-        recommendation = get_activity_recommendation(forecast)  # Użycie nowej funkcji
-        # 4. Zwrócenie danych
+        # 4. DODANIE OBLICZEŃ TEMPERATURY ODCZUWALNEJ do każdego punktu prognozy
+        processed_forecast = []
+        for hour_data in forecast:
+            temp = hour_data.get('temperature')
+            humidity = hour_data.get('relative_humidity')
+            wind = hour_data.get('wind_speed')
+
+            perceived_temp = calculate_perceived_temp(temp, humidity, wind)
+
+            # Wstawienie nowo obliczonej wartości do słownika
+            hour_data['perceived_temperature'] = perceived_temp
+            processed_forecast.append(hour_data)
+
+        # 5. Generowanie zalecenia (używamy processed_forecast)
+        recommendation = get_activity_recommendation(processed_forecast)
+
+        # 6. Zwrócenie danych
         return Response(
             {
                 "city": city.name,
                 "hours": hours,
-                "hourly": forecast,
-                "recommendation": recommendation  # NOWE POLE
+                "hourly": processed_forecast,  # Zmieniono na processed_forecast
+                "recommendation": recommendation
             },
             status=status.HTTP_200_OK
         )

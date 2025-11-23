@@ -10,9 +10,10 @@ const WeatherTable = ({ data }) => {
                 <tr>
                     <th>Miasto</th>
                     <th>Temperatura (°C)</th>
-                    <th>Opady (mm)</th>         {/* NOWA KOLUMNA: precipitation */}
-                    <th>Wiatr (m/s)</th>       {/* NOWA KOLUMNA: wind_speed */}
-                    <th>Wilgotność (%)</th>    {/* NOWA KOLUMNA: relative_humidity */}
+                    <th>Odczuwalna Temp. (°C)</th> {/* NOWY NAGŁÓWEK */}
+                    <th>Opady (mm)</th>
+                    <th>Wiatr (m/s)</th>
+                    <th>Wilgotność (%)</th>
                     <th>Ostatnia Aktualizacja</th>
                 </tr>
             </thead>
@@ -34,6 +35,11 @@ const WeatherTable = ({ data }) => {
 
                             </td>
                             <td>{item.temperature.toFixed(1)}</td>
+                            <td>
+                                {item.perceived_temperature !== null
+                                    ? item.perceived_temperature.toFixed(1)
+                                    : item.temperature.toFixed(1)}
+                            </td>
                             <td>{item.precipitation.toFixed(1)}</td>
                             <td>{item.wind_speed.toFixed(1)}</td>
                             <td>{item.relative_humidity.toFixed(0)}</td>
