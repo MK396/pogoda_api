@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import WeatherMap from '../components/WeatherMap';
 import WeatherTable from '../components/WeatherTable';
 
-// Zakładamy, że baza API to http://127.0.0.1:8000/api/
+
 const API_URL = "http://127.0.0.1:8000/api/pogoda/";
 
 const HomePage = () => {
@@ -42,7 +42,7 @@ const HomePage = () => {
 
     return (
         <main>
-            <h1>Aktualna Pogoda w Polsce</h1>
+            <h1>Stacja pogodowa</h1>
             <div className="map-and-table-container">
                 {/* Nie przekazujemy już onCityClick, bo routing jest w mapie/tabeli */}
                 <WeatherMap data={currentWeather} />
