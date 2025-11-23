@@ -82,7 +82,7 @@ const ForecastChart = ({ data, dataKey, name, color, unit }) => (
 );
 
 
-const WeatherForecast = ({ city }) => {
+const WeatherForecast = ({ city, latestReading }) => { // DODANO latestReading
     const [data, setData] = useState(null);
     const [loading, setLoading] = useState(false);
     const [recommendation, setRecommendation] = useState(null);
@@ -125,15 +125,16 @@ const WeatherForecast = ({ city }) => {
     const filteredData = data
         ? data
             .filter((hour) => {
+                // Ustawiamy filtr na całą prognozę, ponieważ "Aktualna Pogoda" jest pobierana osobno.
                 const hourTime = new Date(hour.time);
-                const nowPlusOne = new Date();
-                nowPlusOne.setHours(nowPlusOne.getHours() + 1);
-                return hourTime >= nowPlusOne;
+                const now = new Date();
+                return hourTime >= now;
             })
             .slice(0, 49)
             .map((h) => ({
                 ...h,
                 label: new Date(h.time).toLocaleString('pl-PL', {
+                    year: 'numeric',
                     month: "2-digit",
                     day: "2-digit",
                     hour: "2-digit",
@@ -142,13 +143,12 @@ const WeatherForecast = ({ city }) => {
             }))
         : [];
 
-    const currentData = filteredData.length > 0 ? filteredData[0] : null;
 
     return (
         <div id="weather-forecast" style={{ marginTop: "30px" }}>
             <h2>Prognoza pogody dla **{city}**</h2>
 
-            {/* SMART FEATURE: REKOMENDACJA AKTYWNOŚCI */}
+            {/* REKOMENDACJA bez zmian */}
             {recommendation && (
                 <div style={{
                     padding: '10px',
@@ -162,35 +162,39 @@ const WeatherForecast = ({ city }) => {
                 </div>
             )}
 
-            {/* AKTUALNA POGODA (na podstawie najbliższego punktu prognozy) */}
-            {currentData && (
+
+            {latestReading && (
                 <div style={{
                     marginBottom: '30px',
                     padding: '15px',
                     border: '1px solid #ccc',
                     borderRadius: '8px',
                     backgroundColor: '#f9f9f9',
-                    color: '#333' // Ustawienie ciemnego koloru tekstu dla widoczności
+                    color: '#333'
                 }}>
-                    <h3 style={{ margin: '0 0 10px 0', color: '#0056b3' }}>Aktualna Pogoda ({currentData.label})</h3>
+
+                    <h3 style={{ margin: '0 0 10px 0', color: '#0056b3' }}>
+                        Aktualna Pogoda ({new Date(latestReading.last_updated).toLocaleString('pl-PL')})
+                    </h3>
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '20px' }}>
                         <p style={{ margin: 0 }}>
-                            **Temperatura:** **{currentData.temperature.toFixed(1)}°C**
+                            Temperatura:{latestReading.temperature.toFixed(1)}°C**
                         </p>
                         <p style={{ margin: 0 }}>
-                            **Odczuwalna:** **{(currentData.perceived_temperature !== null ? currentData.perceived_temperature : currentData.temperature).toFixed(1)}°C**
+
+                            Odczuwalna:{(latestReading.perceived_temperature !== null ? latestReading.perceived_temperature : latestReading.temperature).toFixed(1)}°C**
                         </p>
                         <p style={{ margin: 0 }}>
-                            **Wiatr:** {currentData.wind_speed.toFixed(1)} m/s
+                            Wiatr: {latestReading.wind_speed.toFixed(1)} m/s
                         </p>
                         <p style={{ margin: 0 }}>
-                            **Wilgotność:** {currentData.relative_humidity.toFixed(0)}%
+                            Wilgotność: {latestReading.relative_humidity.toFixed(0)}%
                         </p>
                     </div>
                 </div>
             )}
 
-            {/* KONTENER DLA CZTERECH POWIĘKSZONYCH WYKRESÓW */}
+            {/* KONTENER DLA WYKRESÓW (bez zmian) */}
             {filteredData.length > 0 ? (
                 <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center' }}>
 
@@ -201,7 +205,6 @@ const WeatherForecast = ({ city }) => {
                         color="#ff0000"
                         unit="°C"
                     />
-
                     <ForecastChart
                         data={filteredData}
                         dataKey="precipitation"
@@ -209,7 +212,6 @@ const WeatherForecast = ({ city }) => {
                         color="#0088fe"
                         unit="mm"
                     />
-
                     <ForecastChart
                         data={filteredData}
                         dataKey="wind_speed"
@@ -217,7 +219,6 @@ const WeatherForecast = ({ city }) => {
                         color="#00c49f"
                         unit="m/s"
                     />
-
                     <ForecastChart
                         data={filteredData}
                         dataKey="relative_humidity"

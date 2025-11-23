@@ -1,22 +1,55 @@
 // frontend/src/pages/CityDetailPage.jsx
-import React from 'react';
-// IMPORTUJEMY NARZĘDZIA DO POBIERANIA PARAMETRÓW URL
+import React, { useState, useEffect } from 'react'; // DODANO useState, useEffect
 import { useParams, useNavigate } from 'react-router-dom';
 
 import CityHistory from '../components/CityHistory';
 import WeatherForecast from '../components/WeatherForecast';
 
+// Używamy endpointu, który zwraca listę aktualnych, odświeżonych danych dla WSZYSTKICH miast.
+const ALL_CURRENT_API_URL = "http://127.0.0.1:8000/api/pogoda/refresh/";
+
 const CityDetailPage = () => {
-    // useParams() pobiera parametr ':city' zdefiniowany w App.jsx
     const { city: city_name_encoded } = useParams();
     const navigate = useNavigate();
+    const decodedCityName = decodeURIComponent(city_name_encoded);
 
-    if (!city_name_encoded) {
-        return <div>Błąd: Nie podano nazwy miasta w adresie URL.</div>;
+    // NOWY STAN: do przechowywania pojedynczego, najnowszego odczytu z listy głównej
+    const [latestReading, setLatestReading] = useState(null);
+    const [isLoadingDetails, setIsLoadingDetails] = useState(true);
+
+    // NOWA FUNKCJA: Pobiera listę miast i filtruje ten jeden rekord
+    const fetchCityDetails = async (city) => {
+        setIsLoadingDetails(true);
+        try {
+            // 1. Pobierz listę wszystkich najnowszych odczytów
+            const listResponse = await fetch(ALL_CURRENT_API_URL);
+            if (!listResponse.ok) {
+                throw new Error(`HTTP error! status: ${listResponse.status}`);
+            }
+            const listData = await listResponse.json();
+
+            // 2. Znajdź miasto pasujące do URL
+            const matchedCity = listData.find(item => item.city_name === city);
+
+            // 3. Zapisz najnowszy odczyt
+            setLatestReading(matchedCity);
+
+        } catch (e) {
+            console.error("Błąd pobierania aktualnych danych dla detali:", e);
+        } finally {
+            setIsLoadingDetails(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchCityDetails(decodedCityName);
+    }, [decodedCityName]);
+
+
+    if (isLoadingDetails) {
+        return <div>Ładowanie danych miasta...</div>;
     }
 
-    // Ważne: Dekodowanie nazwy miasta, aby obsłużyć spacje, polskie znaki itp.
-    const decodedCityName = decodeURIComponent(city_name_encoded);
 
     return (
         <div className="city-detail-page">
@@ -28,7 +61,11 @@ const CityDetailPage = () => {
 
             <section className="weather-detail-section">
                 <h2>Prognoza Godzinowa (48h)</h2>
-                <WeatherForecast city={decodedCityName} />
+
+                <WeatherForecast
+                    city={decodedCityName}
+                    latestReading={latestReading}
+                />
             </section>
 
             <section className="weather-detail-section">
