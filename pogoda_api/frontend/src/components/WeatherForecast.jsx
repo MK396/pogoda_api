@@ -13,6 +13,7 @@ import {
 const WeatherForecast = ({ city, cities = [], onCityChange }) => {
     const [data, setData] = useState(null);
     const [loading, setLoading] = useState(false);
+    const [recommendation, setRecommendation] = useState(null);
 
     const handleCitySelect = (e) => {
         if (onCityChange) onCityChange(e.target.value);
@@ -22,6 +23,7 @@ const WeatherForecast = ({ city, cities = [], onCityChange }) => {
         if (!selectedCity) return;
         setLoading(true);
         setData(null);
+        setRecommendation(null);
 
         try {
             // NAPRAWA #1: Kodowanie nazwy miasta do użycia w URL-u
@@ -35,6 +37,8 @@ const WeatherForecast = ({ city, cities = [], onCityChange }) => {
 
             const json = await res.json();
             setData(json.hourly);
+            setRecommendation(json.recommendation);
+
         } catch (error) {
             console.error("Błąd pobierania prognozy:", error);
             alert("Nie udało się pobrać prognozy.");
@@ -73,6 +77,12 @@ const WeatherForecast = ({ city, cities = [], onCityChange }) => {
     return (
         <div id="weather-forecast" style={{ marginTop: "30px" }}>
             <h2>Prognoza pogody {city ? `dla ${city}` : ""}</h2>
+
+            {recommendation && (
+                <div style={{ padding: '10px', background: '#e0f7fa', borderLeft: '5px solid #00bcd4', marginBottom: '20px', fontWeight: 'bold' }}>
+                    {recommendation}
+                </div>
+            )}
 
             {cities.length > 0 && (
                 <div style={{ marginBottom: "15px" }}>

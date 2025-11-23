@@ -6,7 +6,7 @@ from django.shortcuts import get_object_or_404  # Użyjemy tego, zamiast generic
 
 from .models import WeatherData, City
 from .serializers import CurrentWeatherSerializer, CityHistorySerializer
-from .utils import fetch_and_save_weather_data, fetch_hourly_forecast
+from .utils import fetch_and_save_weather_data, fetch_hourly_forecast, get_activity_recommendation
 
 
 # from .utils import fetch_and_save_weather_data # Zakładamy, że to działa
@@ -138,12 +138,14 @@ class HourlyForecastAPI(views.APIView):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
+        recommendation = get_activity_recommendation(forecast)  # Użycie nowej funkcji
         # 4. Zwrócenie danych
         return Response(
             {
                 "city": city.name,
                 "hours": hours,
-                "hourly": forecast
+                "hourly": forecast,
+                "recommendation": recommendation  # NOWE POLE
             },
             status=status.HTTP_200_OK
         )

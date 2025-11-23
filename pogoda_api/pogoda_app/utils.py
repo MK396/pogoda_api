@@ -195,3 +195,34 @@ def fetch_hourly_forecast(city, hours=48):
     except Exception as e:
         print(f"❌ Błąd pobierania prognozy dla {city.name}: {e}")
         return []
+
+def get_activity_recommendation(hourly_forecast):
+    """
+    Analizuje prognozę godzinową i generuje proste zalecenie dotyczące aktywności.
+    Reguły: jeśli wiatr > 8 m/s LUB opady > 0.5 mm, uznajemy to za "złą" godzinę.
+    """
+    if not hourly_forecast:
+        return "Brak prognozy, nie można wydać zalecenia."
+
+    # Liczba godzin, w których występuje zła pogoda
+    bad_weather_hours = 0
+    total_hours = len(hourly_forecast)
+
+    # Progi dla złej pogody
+    PRECIPITATION_THRESHOLD = 0.5  # mm/h
+    WIND_THRESHOLD = 8             # m/s
+
+    for hour in hourly_forecast:
+        precip = hour.get('precipitation', 0)
+        wind = hour.get('wind_speed', 0)
+
+        if precip > PRECIPITATION_THRESHOLD or wind > WIND_THRESHOLD:
+            bad_weather_hours += 1
+
+    # Reguły decyzyjne oparte na odsetku "złych" godzin
+    if bad_weather_hours >= total_hours * 0.75:
+        return "⚠️ WARUNKI NIEKORZYSTNE: Zalecamy pozostanie w domu (silny wiatr lub deszcz)."
+    elif bad_weather_hours >= total_hours * 0.35:
+        return "☔ OSTRZEŻENIE: Możliwe opady lub wiatr w prognozie. Warto mieć przy sobie kurtkę przeciwdeszczową."
+    else:
+        return "✅ DOBRE WARUNKI: Można planować aktywność na zewnątrz."
