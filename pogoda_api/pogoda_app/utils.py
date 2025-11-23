@@ -210,7 +210,7 @@ def get_activity_recommendation(hourly_forecast):
 
     # Progi dla złej pogody
     PRECIPITATION_THRESHOLD = 0.5  # mm/h
-    WIND_THRESHOLD = 8             # m/s
+    WIND_THRESHOLD = 9             # m/s
 
     for hour in hourly_forecast:
         precip = hour.get('precipitation', 0)

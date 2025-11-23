@@ -10,9 +10,89 @@ import {
     ResponsiveContainer
 } from "recharts";
 
+
+
+
+const CustomTooltip = ({ active, payload, label, unit }) => {
+    if (active && payload && payload.length) {
+        // Nazwa i wartość są w pierwszym elemencie payload, ponieważ jest tylko jedna linia na wykresie
+        const dataPoint = payload[0];
+
+        return (
+            <div style={{
+                // Ustawienie tła na białe z lekką przezroczystością
+                backgroundColor: 'rgba(255, 255, 255, 0.9)',
+                padding: '10px',
+                border: '1px solid #ccc',
+                // ZMIANA: Ustawienie ciemnego koloru tekstu
+                color: '#333',
+                fontSize: '14px',
+                lineHeight: '1.4'
+            }}>
+                {/* Nagłówek dymka - Data i godzina */}
+                <p style={{ margin: '0 0 5px 0', fontWeight: 'bold' }}>{`Data i godzina: ${label}`}</p>
+
+                {/* Wartość danych (np. Temperatura: 15.5 °C) */}
+                <p style={{ margin: 0 }}>{`${dataPoint.name}: ${dataPoint.value.toFixed(1)} ${unit}`}</p>
+            </div>
+        );
+    }
+    return null;
+};
+
+const ForecastChart = ({ data, dataKey, name, color, unit }) => (
+    <div style={{
+        width: '50%', // Zwiększona szerokość, aby ułożyć 2 wykresy w rzędzie
+        minWidth: '400px', // Zwiększony minimalny rozmiar
+        height: 350, // ZWIĘKSZONA WYSOKOŚĆ
+        margin: '10px',
+        padding: '10px',
+        border: '1px solid #ddd',
+        display: 'flex',
+        flexDirection: 'column',
+        boxSizing: 'border-box'
+    }}>
+        <h3 style={{ margin: '0 0 5px 0' }}>{name}</h3>
+
+        <div style={{ flex: 1, minHeight: 0 }}>
+            <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={data} margin={{ top: 5, right: 20, left: 20, bottom: 40 }}>
+                    <CartesianGrid strokeDasharray="3 3" />
+
+                    <XAxis
+                        dataKey="label"
+                        angle={-45}
+                        textAnchor="end"
+                        interval={Math.floor(data.length / 5)}
+                        height={50}
+                    />
+
+                    <YAxis label={{ value: unit, angle: -90, position: 'insideLeft' }} />
+
+                    <Tooltip
+                        content={<CustomTooltip unit={unit} />}
+                    />
+
+                    <Legend />
+                    <Line
+                        type="monotone"
+                        dataKey={dataKey}
+                        name={name}
+                        stroke={color}
+                        dot={false}
+                        strokeWidth={2}
+                    />
+                </LineChart>
+            </ResponsiveContainer>
+        </div>
+    </div>
+);
+
+
 const WeatherForecast = ({ city, cities = [], onCityChange }) => {
     const [data, setData] = useState(null);
     const [loading, setLoading] = useState(false);
+    // PRZYWRÓCONY STAN REKOMENDACJI
     const [recommendation, setRecommendation] = useState(null);
 
     const handleCitySelect = (e) => {
@@ -23,10 +103,9 @@ const WeatherForecast = ({ city, cities = [], onCityChange }) => {
         if (!selectedCity) return;
         setLoading(true);
         setData(null);
-        setRecommendation(null);
+        setRecommendation(null); // Reset rekomendacji
 
         try {
-            // NAPRAWA #1: Kodowanie nazwy miasta do użycia w URL-u
             const encodedCity = encodeURIComponent(selectedCity);
 
             const res = await fetch(`http://localhost:8000/api/pogoda/forecast/${encodedCity}/`);
@@ -37,6 +116,7 @@ const WeatherForecast = ({ city, cities = [], onCityChange }) => {
 
             const json = await res.json();
             setData(json.hourly);
+            // PRZYWRÓCONE ZAPISYWANIE REKOMENDACJI
             setRecommendation(json.recommendation);
 
         } catch (error) {
@@ -47,7 +127,6 @@ const WeatherForecast = ({ city, cities = [], onCityChange }) => {
         }
     };
 
-    // Automatyczne pobieranie prognozy po zmianie miasta
     useEffect(() => {
         if (city) {
             fetchForecast(city);
@@ -65,7 +144,7 @@ const WeatherForecast = ({ city, cities = [], onCityChange }) => {
             .slice(0, 49)
             .map((h) => ({
                 ...h,
-                label: new Date(h.time).toLocaleTimeString([], {
+                label: new Date(h.time).toLocaleString('pl-PL', {
                     month: "2-digit",
                     day: "2-digit",
                     hour: "2-digit",
@@ -78,8 +157,16 @@ const WeatherForecast = ({ city, cities = [], onCityChange }) => {
         <div id="weather-forecast" style={{ marginTop: "30px" }}>
             <h2>Prognoza pogody {city ? `dla ${city}` : ""}</h2>
 
+            {/* PRZYWRÓCONY DIV Z REKOMENDACJĄ (SMART FEATURE) */}
             {recommendation && (
-                <div style={{ padding: '10px', background: '#e0f7fa', borderLeft: '5px solid #00bcd4', marginBottom: '20px', fontWeight: 'bold' }}>
+                <div style={{
+                    padding: '10px',
+                    background: '#e0f7fa',
+                    borderLeft: '5px solid #00bcd4',
+                    marginBottom: '20px',
+                    fontWeight: 'bold',
+                    color: '#333' // Utrzymujemy ciemny kolor tekstu
+                }}>
                     {recommendation}
                 </div>
             )}
@@ -100,7 +187,6 @@ const WeatherForecast = ({ city, cities = [], onCityChange }) => {
                 </div>
             )}
 
-            {/* Opcjonalny przycisk do ręcznego pobrania */}
             <button
                 onClick={() => fetchForecast(city)}
                 disabled={loading || !city}
@@ -109,53 +195,41 @@ const WeatherForecast = ({ city, cities = [], onCityChange }) => {
                 {loading ? "Ładowanie..." : "Pobierz prognozę godzinową"}
             </button>
 
+            {/* KONTENER DLA CZTERECH POWIĘKSZONYCH WYKRESÓW */}
             {filteredData.length > 0 ? (
-                <div style={{ width: "100%", height: 400 }}>
-                    <ResponsiveContainer>
-                        <LineChart data={filteredData}>
-                            <CartesianGrid strokeDasharray="3 3" />
-                            <XAxis dataKey="label" />
-                            <YAxis />
-                            <Tooltip />
-                            <Legend />
+                <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center' }}>
 
-                            {/* LINIA 1: TEMPERATURA */}
-                            <Line
-                                type="monotone"
-                                dataKey="temperature"
-                                name="Temperatura (°C)"
-                                stroke="#ff0000"
-                                yAxisId={0} // Domyślna oś Y (lewa)
-                            />
+                    <ForecastChart
+                        data={filteredData}
+                        dataKey="temperature"
+                        name="Temperatura"
+                        color="#ff0000"
+                        unit="°C"
+                    />
 
-                            {/* LINIA 2: WILGOTNOŚĆ */}
-                            <Line
-                                type="monotone"
-                                dataKey="relative_humidity"
-                                name="Wilgotność (%)"
-                                stroke="#0088fe"
-                                yAxisId={0}
-                            />
+                    <ForecastChart
+                        data={filteredData}
+                        dataKey="precipitation"
+                        name="Opady"
+                        color="#0088fe"
+                        unit="mm"
+                    />
 
-                            {/* LINIA 3: WIATR */}
-                            <Line
-                                type="monotone"
-                                dataKey="wind_speed"
-                                name="Wiatr (m/s)"
-                                stroke="#00c49f"
-                                yAxisId={0}
-                            />
+                    <ForecastChart
+                        data={filteredData}
+                        dataKey="wind_speed"
+                        name="Prędkość Wiatru"
+                        color="#00c49f"
+                        unit="m/s"
+                    />
 
-                            {/* LINIA 4: OPADY */}
-                            <Line
-                                type="monotone"
-                                dataKey="precipitation"
-                                name="Opady (mm)"
-                                stroke="#82ca9d"
-                                yAxisId={0}
-                            />
-                        </LineChart>
-                    </ResponsiveContainer>
+                    <ForecastChart
+                        data={filteredData}
+                        dataKey="relative_humidity"
+                        name="Wilgotność"
+                        color="#ffbb2c"
+                        unit="%"
+                    />
                 </div>
             ) : (
                 !loading && <p>Brak danych dla aktualnej prognozy.</p>
