@@ -1,43 +1,50 @@
 // frontend/src/components/WeatherMap.jsx
 import React from 'react';
 import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
-import L from 'leaflet';
-
-// Naprawa ikon Leaflet
-delete L.Icon.Default.prototype._getIconUrl;
-
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
-  iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
-  shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
-});
+// NOWY IMPORT
+import { Link } from 'react-router-dom';
 
 const WeatherMap = ({ data }) => {
-    const position = [52.0, 19.0];
-    const zoom = 6;
+    // Domyślne współrzędne środka Polski (Warszawa)
+    const defaultCenter = [52.2297, 21.0122];
 
     return (
-        <div id="map">
+        <div id="map-container">
             <MapContainer
-                center={position}
-                zoom={zoom}
-                scrollWheelZoom={true}
-                style={{ height: '100%', width: '100%' }}
+                center={defaultCenter}
+                zoom={6}
+                style={{ height: '500px', width: '100%' }}
+                scrollWheelZoom={false}
             >
                 <TileLayer
                     url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                    attribution='&copy; OpenStreetMap'
+                    attribution='&copy; <a href="http://osm.org/copyright">OpenStreetMap</a> contributors'
                 />
 
-                {data.map(item => (
+                {data.map((city) => (
                     <Marker
-                        key={item.city_name}
-                        position={[item.latitude, item.longitude]}
-                        // ❌ USUNIĘTE kliknięcie markera
+                        key={city.city_name}
+                        position={[city.latitude, city.longitude]}
                     >
                         <Popup>
-                            <b>{item.city_name}</b><br/>
-                            Temp: {item.temperature.toFixed(1)} °C
+                            <div style={{ textAlign: 'center' }}>
+                                <h3>{city.city_name}</h3>
+                                <p>Temperatura: <strong>{city.temperature.toFixed(1)}°C</strong></p>
+                                {/* Pamiętamy o dodanych wcześniej polach */}
+                                <p>Wilgotność: {city.relative_humidity.toFixed(0)}%</p>
+                                <p>Wiatr: {city.wind_speed.toFixed(1)} m/s</p>
+
+                                <hr style={{ margin: '8px 0' }} />
+
+                                {/* NOWY ODNOŚNIK */}
+                                {/* Używamy encodeURIComponent, aby nazwy miast ze spacjami były poprawne w URL */}
+                                <Link
+                                    to={`/pogoda/${encodeURIComponent(city.city_name)}`}
+                                    style={{ color: '#007bff', fontWeight: 'bold', textDecoration: 'none' }}
+                                >
+                                    Zobacz szczegóły &rarr;
+                                </Link>
+                            </div>
                         </Popup>
                     </Marker>
                 ))}
