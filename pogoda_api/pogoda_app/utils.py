@@ -1,4 +1,3 @@
-# pogoda/utils.py
 
 import logging
 from datetime import datetime, timedelta, time
@@ -12,13 +11,11 @@ from retry_requests import retry
 
 from .models import City, WeatherData
 
-# Konfiguracja loggera
 logger = logging.getLogger(__name__)
 
 
 def setup_openmeteo_client():
     """Konfiguruje klienta Open-Meteo z mechanizmem cache i retry."""
-    # Używamy sesji z cachem, aby nie przeciążać API (dane odświeżają się co godzinę)
     cache_session = requests_cache.CachedSession('.cache', expire_after=3600)
     return openmeteo_requests.Client(session=retry(cache_session, retries=5, backoff_factor=0.2))
 
@@ -47,13 +44,11 @@ def fetch_and_save_weather_data():
             response = responses[0]
             current = response.Current()
 
-            # Odczyt zmiennych - indeksowanie musi zgadzać się z listą w 'current'
             temp = current.Variables(0).Value()
             precipitation = current.Variables(1).Value()
             wind_speed = current.Variables(2).Value()
             relative_humidity = current.Variables(3).Value()
 
-            # Zapis nowego odczytu do bazy Django (model WeatherData)
             WeatherData.objects.create(
                 city=city_obj,
                 temperature=temp,
@@ -81,8 +76,7 @@ def fetch_hourly_forecast(city, hours=48):
     Pobiera prognozę godzinową dla danego miasta od aktualnej godziny.
     Zwraca listę słowników z danymi godzinowymi.
     """
-    # Używamy requests (standardowej biblioteki) zamiast openmeteo_requests,
-    # tak jak w oryginalnym kodzie.
+
 
     start_time = datetime.now(pytz.timezone("Europe/Warsaw")).replace(minute=0, second=0, microsecond=0)
     end_time = start_time + timedelta(hours=hours)
@@ -114,7 +108,6 @@ def fetch_hourly_forecast(city, hours=48):
 
         forecast_data = []
         for i in range(len(times)):
-            # Ograniczenie do żądanej liczby godzin (API może zwrócić więcej)
             if i >= hours:
                 break
 
@@ -130,7 +123,7 @@ def fetch_hourly_forecast(city, hours=48):
 
     except requests.exceptions.RequestException as e:
         logger.error("❌ Błąd żądania API dla prognozy dla %s: %s", city.name, e)
-        # Propagujemy błąd, aby widok mógł zwrócić 500
+
         raise Exception(f"Błąd API: {e}")
     except Exception as e:
         logger.error("❌ Nieoczekiwany błąd pobierania prognozy dla %s: %s", city.name, e)
@@ -218,8 +211,7 @@ def fetch_and_save_last_30_days(city):
         "longitude": city.longitude,
         "start_date": start_date.strftime("%Y-%m-%d"),
         "end_date": end_date.strftime("%Y-%m-%d"),
-        # Pobieramy: temperaturę średnią, sumę opadów, max wiatr
-        # ERA5 Archive ma też relative_humidity_2m_mean (średnią wilgotność)
+
         "daily": "temperature_2m_mean,precipitation_sum,wind_speed_10m_max,relative_humidity_2m_mean",
         "timezone": "Europe/Warsaw"
     }
@@ -240,25 +232,24 @@ def fetch_and_save_last_30_days(city):
             logger.warning(f"Brak danych historycznych dla {city.name}")
             return False
 
-        # Strefa czasowa (ważne dla DateTimeField)
+
         tz = pytz.timezone("Europe/Warsaw")
 
         for i, date_str in enumerate(dates):
-            # 1. Tworzymy obiekt daty
+
             date_obj = datetime.strptime(date_str, "%Y-%m-%d").date()
 
-            # 2. Tworzymy timestamp na godzinę 12:00 tego dnia (aware datetime)
-            naive_datetime = datetime.combine(date_obj, time(12, 0))
+
+            naive_datetime = datetime.combine(date_obj, time(6, 0))
             aware_datetime = tz.localize(naive_datetime)
 
-            # Bezpieczne pobieranie wartości
+
             t = temps[i] if i < len(temps) and temps[i] is not None else 0.0
             p = precip[i] if i < len(precip) and precip[i] is not None else 0.0
             w = winds[i] if i < len(winds) and winds[i] is not None else 0.0
-            h = humid[i] if i < len(humid) and humid[i] is not None else 50.0  # Domyślna wilgotność jeśli brak
+            h = humid[i] if i < len(humid) and humid[i] is not None else 50.0
 
-            # 3. Zapisujemy do głównej tabeli WeatherData
-            # Używamy update_or_create, aby nie dublować danych, jeśli klikniesz przycisk 2 razy
+
             WeatherData.objects.update_or_create(
                 city=city,
                 timestamp=aware_datetime,
@@ -276,3 +267,26 @@ def fetch_and_save_last_30_days(city):
     except Exception as e:
         logger.error(f"❌ Błąd pobierania historii 30 dni dla {city.name}: {e}")
         raise e
+
+
+def fetch_history_for_all_cities():
+    """
+    Uruchamia pobieranie historii (30 dni) dla KAŻDEGO miasta w bazie.
+    Zwraca raport (listę komunikatów).
+    """
+    cities = City.objects.all()
+    report = []
+
+    logger.info("--- START: Pobieranie historii dla wszystkich miast ---")
+
+    for city in cities:
+        try:
+            success = fetch_and_save_last_30_days(city)
+            status = "OK" if success else "Brak danych"
+            report.append(f"{city.name}: {status}")
+        except Exception as e:
+            logger.error(f"Błąd przy masowym pobieraniu dla {city.name}: {e}")
+            report.append(f"{city.name}: BŁĄD ({str(e)})")
+
+    logger.info("--- KONIEC: Pobieranie historii zakończone ---")
+    return report

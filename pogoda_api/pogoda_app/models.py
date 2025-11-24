@@ -18,8 +18,8 @@ class City(models.Model):
 class WeatherData(models.Model):
     """
     Przechowuje odczyty pogody:
-    - Bieżące (pobierane co godzinę z /refresh/)
-    - Historyczne (pobierane raz dziennie z /fetch-history/)
+    - Bieżące
+    - Historyczne
     """
     city = models.ForeignKey(
         City,

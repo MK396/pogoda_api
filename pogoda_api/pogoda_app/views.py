@@ -7,7 +7,7 @@ import logging
 from .models import WeatherData, City
 from .serializers import CurrentWeatherSerializer, CityHistorySerializer
 from .utils import fetch_and_save_weather_data, fetch_hourly_forecast, generate_weather_recommendation, \
-    fetch_and_save_last_30_days
+    fetch_and_save_last_30_days, fetch_history_for_all_cities
 
 logger = logging.getLogger(__name__)
 
@@ -140,5 +140,30 @@ class FetchCityHistoryAPI(views.APIView):
         except Exception as e:
             return Response(
                 {"error": f"Wystąpił błąd: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+class FetchAllHistoryAPI(views.APIView):
+    """
+    Endpoint: /api/pogoda/fetch-history-all/
+    Pobiera dane historyczne (30 dni) dla WSZYSTKICH miast w bazie naraz.
+    """
+
+    def get(self, request):
+        try:
+            # Uruchamiamy pętlę dla wszystkich miast
+            report = fetch_history_for_all_cities()
+
+            return Response(
+                {
+                    "message": "Zakończono pobieranie historii dla wszystkich miast.",
+                    "details": report
+                },
+                status=status.HTTP_200_OK
+            )
+        except Exception as e:
+            return Response(
+                {"error": f"Wystąpił błąd krytyczny: {str(e)}"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )

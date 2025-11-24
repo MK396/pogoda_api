@@ -4,7 +4,6 @@ from .models import WeatherData, City
 from .utils import calculate_perceived_temp
 
 
-# 1. Serializer dla pojedynczego rekordu historycznego/detalu
 class WeatherDetailSerializer(serializers.ModelSerializer):
     class Meta:
         model = WeatherData
@@ -16,7 +15,6 @@ class WeatherDetailSerializer(serializers.ModelSerializer):
             'relative_humidity'
         )
 
-# 2. Serializer dla najnowszej pogody (listy miast)
 class CurrentWeatherSerializer(serializers.ModelSerializer):
     """
     Serializuje najnowsze odczyty pogody. Używany do głównej tabeli i mapy.
@@ -37,9 +35,8 @@ class CurrentWeatherSerializer(serializers.ModelSerializer):
         if temp is None:
             return None
 
-        return calculate_perceived_temp(temp, humidity, wind)  # Użycie nowej funkcji
+        return calculate_perceived_temp(temp, humidity, wind)
 
-    # Dodanie tych pól, aby były dostępne w 'weatherData' dla tabeli i mapy
     precipitation = serializers.FloatField()
     wind_speed = serializers.FloatField()
     relative_humidity = serializers.FloatField()
@@ -51,7 +48,7 @@ class CurrentWeatherSerializer(serializers.ModelSerializer):
             'latitude',
             'longitude',
             'temperature',
-            'perceived_temperature', # DODANE NOWE POLE DO FIELDS
+            'perceived_temperature',
             'last_updated',
             'precipitation',
             'wind_speed',
@@ -59,12 +56,10 @@ class CurrentWeatherSerializer(serializers.ModelSerializer):
         )
 
 
-# 3. Serializer dla pełnej historii miasta (detal)
 class CityHistorySerializer(serializers.ModelSerializer):
     """
     Serializuje szczegóły miasta z historią pobraną z tabeli WeatherData.
     """
-    # source='weather_readings' wskazuje na relację w modelu WeatherData (related_name='weather_readings')
     history = WeatherDetailSerializer(many=True, read_only=True, source='weather_readings')
     city_name = serializers.CharField(source='name')
 
