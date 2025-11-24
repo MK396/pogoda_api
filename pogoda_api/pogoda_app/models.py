@@ -1,14 +1,45 @@
+# pogoda/models.py
 from django.db import models
 
-class Pogoda(models.Model):
-    miasto = models.CharField(max_length=50, unique=True)
-    szerokosc_geo = models.DecimalField(max_digits=9, decimal_places=6)
-    dlugosc_geo = models.DecimalField(max_digits=9, decimal_places=6)
-    temperatura = models.DecimalField(max_digits=4, decimal_places=1, null=True)
-    czas = models.DateTimeField()
+
+class City(models.Model):
+    """Przechowuje statyczne dane geograficzne miast."""
+    name = models.CharField(max_length=100, unique=True, primary_key=True)
+    latitude = models.FloatField()
+    longitude = models.FloatField()
 
     def __str__(self):
-        return self.miasto
+        return self.name
 
     class Meta:
-        db_table = 'pogoda'
+        verbose_name_plural = "Cities"
+
+
+class WeatherData(models.Model):
+    """
+    Przechowuje odczyty pogody:
+    - Bieżące
+    - Historyczne
+    """
+    city = models.ForeignKey(
+        City,
+        on_delete=models.CASCADE,
+        related_name='weather_readings'
+    )
+
+    temperature = models.FloatField()
+    precipitation = models.FloatField(null=True, blank=True)
+    wind_speed = models.FloatField(null=True, blank=True)
+    relative_humidity = models.FloatField(null=True, blank=True)
+
+    timestamp = models.DateTimeField()
+
+    def __str__(self):
+        return (
+            f"{self.city.name}: {self.temperature}°C, "
+            f"({self.timestamp.strftime('%Y-%m-%d %H:%M')})"
+        )
+
+    class Meta:
+        ordering = ['-timestamp']
+        db_table = 'pogoda_data'
