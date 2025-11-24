@@ -24,13 +24,41 @@ def fetch_and_save_weather_data():
     """
     Pobiera dane pogodowe dla wszystkich miast z tabeli City i zapisuje je
     jako nowe odczyty w tabeli WeatherData.
+
+    ZMIANA: Sprawdza, czy dane w bazie są świeże (< 5 minut).
+    Jeśli tak, pomija pobieranie z zewnętrznego API.
     """
-    openmeteo = setup_openmeteo_client()
+
+    # --- 1. SPRAWDZENIE ŚWIEŻOŚCI DANYCH (CACHE LOGIC) ---
+    last_reading = WeatherData.objects.order_by('-timestamp').first()
+
+    if last_reading:
+        # Pobieramy aktualny czas w tej samej strefie co dane w bazie
+        tz = pytz.timezone("Europe/Warsaw")
+        now = datetime.now(tz)
+
+        # Obliczamy różnicę czasu
+        time_difference = now - last_reading.timestamp
+
+        # 300 sekund = 5 minut
+        if time_difference.total_seconds() < 300:
+            logger.info(f"⏳ Dane są świeże (sprzed {int(time_difference.total_seconds())}s). Pomijam zewnętrzne API.")
+            return  # <--- PRZERYWAMY FUNKCJĘ TUTAJ, nie wykonujemy requestu do OpenMeteo
+        else:
+            logger.info(f"🔄 Dane są przestarzałe (sprzed {int(time_difference.total_seconds())}s). Pobieram nowe...")
+    else:
+        logger.info("🆕 Pusta baza danych. Pobieram pierwsze dane...")
+
+    # --- 2. SETUP KLIENTA I POBIERANIE (BEZ ZMIAN) ---
+    cache_session = requests_cache.CachedSession('.cache', expire_after=3600)
+    retry_session = retry(cache_session, retries=5, backoff_factor=0.2)
+    openmeteo = openmeteo_requests.Client(session=retry_session)
+
     cities_to_fetch = City.objects.all()
     url = "https://api.open-meteo.com/v1/forecast"
     czas_pl = datetime.now(pytz.timezone("Europe/Warsaw"))
 
-    logger.info("--- Rozpoczęcie pobierania danych o pogodzie: %s ---", czas_pl.strftime('%H:%M:%S'))
+    logger.info(f"--- Start pobierania bieżącej pogody: {czas_pl.strftime('%H:%M:%S')} ---")
 
     for city_obj in cities_to_fetch:
         params = {
@@ -43,7 +71,6 @@ def fetch_and_save_weather_data():
             responses = openmeteo.weather_api(url, params=params)
             response = responses[0]
             current = response.Current()
-
             temp = current.Variables(0).Value()
             precipitation = current.Variables(1).Value()
             wind_speed = current.Variables(2).Value()
@@ -57,19 +84,12 @@ def fetch_and_save_weather_data():
                 relative_humidity=relative_humidity,
                 timestamp=czas_pl
             )
+            logger.info(f"  ✅ {city_obj.name} | {temp:.1f}°C")
 
-            logger.info(
-                "  ✅ %s | %.1f°C | opady: %.1f mm | wiatr: %.1f m/s | wilgotność: %.1f%%",
-                city_obj.name, temp, precipitation, wind_speed, relative_humidity
-            )
-
-        except IntegrityError:
-            logger.warning("  ❌ Błąd integralności danych dla %s. Prawdopodobnie duplikat.", city_obj.name)
         except Exception as e:
-            logger.error("  ❌ Nieoczekiwany błąd pobierania danych dla %s: %s", city_obj.name, e)
+            logger.error(f"  ❌ Błąd dla {city_obj.name}: {e}")
 
-    logger.info("--- Zakończono pobieranie danych. ---")
-
+    logger.info("--- Koniec pobierania. ---")
 
 def fetch_hourly_forecast(city, hours=48):
     """
