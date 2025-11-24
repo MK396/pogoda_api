@@ -260,7 +260,7 @@ def fetch_and_save_last_30_days(city):
             date_obj = datetime.strptime(date_str, "%Y-%m-%d").date()
 
 
-            naive_datetime = datetime.combine(date_obj, time(6, 0))
+            naive_datetime = datetime.combine(date_obj, time(0, 0))
             aware_datetime = tz.localize(naive_datetime)
 
 
