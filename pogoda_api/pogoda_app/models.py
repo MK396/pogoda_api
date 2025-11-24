@@ -19,7 +19,6 @@ class City(models.Model):
         verbose_name_plural = "Cities"
 
 
-# --- MODEL WEATHER DATA (Przechowuje bieżące odczyty) ---
 class WeatherData(models.Model):
     """Przechowuje aktualne i bieżące odczyty pogody z API."""
 
@@ -34,9 +33,6 @@ class WeatherData(models.Model):
     precipitation = models.FloatField(null=True, blank=True)
     wind_speed = models.FloatField(null=True, blank=True)
     relative_humidity = models.FloatField(null=True, blank=True)
-
-    # auto_now_add=True → nadpisywałby ręcznie ustawiany timestamp,
-    # dlatego trzeba zmienić na zwykły DateTimeField
     timestamp = models.DateTimeField()
 
     def __str__(self):
@@ -53,7 +49,6 @@ class WeatherData(models.Model):
         db_table = 'pogoda_data'
 
 
-# --- MODEL DANYCH HISTORYCZNYCH ---
 class HistoricalWeatherData(models.Model):
     city = models.ForeignKey(
         City,

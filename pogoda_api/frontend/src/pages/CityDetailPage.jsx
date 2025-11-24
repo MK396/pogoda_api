@@ -1,59 +1,38 @@
-// frontend/src/pages/CityDetailPage.jsx
-import React, { useState, useEffect } from 'react'; // DODANO useState, useEffect
+// src/pages/CityDetailPage.jsx
+import React from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+
+// Importujemy hooki
+import { useRefreshedCityWeather } from '../hooks/useWeather';
 
 import CityHistory from '../components/CityHistory';
 import WeatherForecast from '../components/WeatherForecast';
 
-// Używamy endpointu, który zwraca listę aktualnych, odświeżonych danych dla WSZYSTKICH miast.
-const ALL_CURRENT_API_URL = "http://127.0.0.1:8000/api/pogoda/refresh/";
-
 const CityDetailPage = () => {
     const { city: city_name_encoded } = useParams();
     const navigate = useNavigate();
+
+    // Dekodowanie nazwy miasta
     const decodedCityName = decodeURIComponent(city_name_encoded);
 
-    // NOWY STAN: do przechowywania pojedynczego, najnowszego odczytu z listy głównej
-    const [latestReading, setLatestReading] = useState(null);
-    const [isLoadingDetails, setIsLoadingDetails] = useState(true);
+    // Używamy hooka do pobrania najnowszego odczytu (z endpointu /refresh/)
+    const { latestReading, loading: isLoadingDetails } = useRefreshedCityWeather(decodedCityName);
 
-    // NOWA FUNKCJA: Pobiera listę miast i filtruje ten jeden rekord
-    const fetchCityDetails = async (city) => {
-        setIsLoadingDetails(true);
-        try {
-            // 1. Pobierz listę wszystkich najnowszych odczytów
-            const listResponse = await fetch(ALL_CURRENT_API_URL);
-            if (!listResponse.ok) {
-                throw new Error(`HTTP error! status: ${listResponse.status}`);
-            }
-            const listData = await listResponse.json();
-
-            // 2. Znajdź miasto pasujące do URL
-            const matchedCity = listData.find(item => item.city_name === city);
-
-            // 3. Zapisz najnowszy odczyt
-            setLatestReading(matchedCity);
-
-        } catch (e) {
-            console.error("Błąd pobierania aktualnych danych dla detali:", e);
-        } finally {
-            setIsLoadingDetails(false);
-        }
-    };
-
-    useEffect(() => {
-        fetchCityDetails(decodedCityName);
-    }, [decodedCityName]);
-
+    if (!decodedCityName) {
+        return <div>Błąd: Nie podano nazwy miasta w adresie URL.</div>;
+    }
 
     if (isLoadingDetails) {
         return <div>Ładowanie danych miasta...</div>;
     }
 
-
     return (
         <div className="city-detail-page">
-            <button onClick={() => navigate('/')} className="back-button">
+            <button
+                onClick={() => navigate('/')}
+                className="back-button"
+                style={{ marginBottom: '20px', padding: '5px 10px', cursor: 'pointer' }}
+            >
                 &larr; Powrót do Strony Głównej
             </button>
 
@@ -62,6 +41,7 @@ const CityDetailPage = () => {
             <section className="weather-detail-section">
                 <h2>Prognoza Godzinowa (48h)</h2>
 
+                {/* Przekazujemy latestReading do komponentu prognozy, aby obsłużyć ostrzeżenia */}
                 <WeatherForecast
                     city={decodedCityName}
                     latestReading={latestReading}

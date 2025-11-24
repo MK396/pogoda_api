@@ -4,81 +4,77 @@ import openmeteo_requests
 from retry_requests import retry
 import requests_cache
 import pytz
-from datetime import datetime
-from django.db import IntegrityError
-from .models import City, WeatherData, HistoricalWeatherData  # Importujemy oba nowe modele
 from datetime import datetime, timedelta
 from calendar import monthrange
 import requests
+from django.db import IntegrityError
+import logging
+
+from .models import City, WeatherData, HistoricalWeatherData
+
+# Konfiguracja loggera
+logger = logging.getLogger(__name__)
+
+
+def setup_openmeteo_client():
+    """Konfiguruje klienta Open-Meteo z mechanizmem cache i retry."""
+    # Używamy sesji z cachem, aby nie przeciążać API (dane odświeżają się co godzinę)
+    cache_session = requests_cache.CachedSession('.cache', expire_after=3600)
+    return openmeteo_requests.Client(session=retry(cache_session, retries=5, backoff_factor=0.2))
+
 
 def fetch_and_save_weather_data():
     """
     Pobiera dane pogodowe dla wszystkich miast z tabeli City i zapisuje je
     jako nowe odczyty w tabeli WeatherData.
     """
-
-    # 1. Setup Open-Meteo client
-    # Używamy sesji z cachem, aby nie przeciążać API (dane odświeżają się co godzinę)
-    cache_session = requests_cache.CachedSession('.cache', expire_after=3600)
-    retry_session = retry(cache_session, retries=5, backoff_factor=0.2)
-    openmeteo = openmeteo_requests.Client(session=retry_session)
-
-    # 2. Pobieramy wszystkie miasta z bazy danych
+    openmeteo = setup_openmeteo_client()
     cities_to_fetch = City.objects.all()
-
-    # Adres API
     url = "https://api.open-meteo.com/v1/forecast"
-
-    # Strefa czasowa dla tagowania czasu zapisu
     czas_pl = datetime.now(pytz.timezone("Europe/Warsaw"))
 
-    print(f"--- Rozpoczęcie pobierania danych o pogodzie: {czas_pl.strftime('%H:%M:%S')} ---")
+    logger.info("--- Rozpoczęcie pobierania danych o pogodzie: %s ---", czas_pl.strftime('%H:%M:%S'))
 
     for city_obj in cities_to_fetch:
-        # 3. Używamy współrzędnych z obiektu City
         params = {
             "latitude": city_obj.latitude,
             "longitude": city_obj.longitude,
-            # ZAKTUALIZOWANA LISTA ZMIENNYCH
             "current": "temperature_2m,precipitation,windspeed_10m,relative_humidity_2m",
         }
 
         try:
-            # Wywołanie API
             responses = openmeteo.weather_api(url, params=params)
             response = responses[0]
             current = response.Current()
+
+            # Odczyt zmiennych - indeksowanie musi zgadzać się z listą w 'current'
             temp = current.Variables(0).Value()
             precipitation = current.Variables(1).Value()
             wind_speed = current.Variables(2).Value()
-            # ODCZYTANIE NOWEGO POLA (index 3)
             relative_humidity = current.Variables(3).Value()
 
-            # 4. Zapis nowego odczytu do bazy Django (model WeatherData)
+            # Zapis nowego odczytu do bazy Django (model WeatherData)
             WeatherData.objects.create(
                 city=city_obj,
                 temperature=temp,
                 precipitation=precipitation,
                 wind_speed=wind_speed,
-                # ZAPIS NOWEGO POLA
                 relative_humidity=relative_humidity,
                 timestamp=czas_pl
             )
 
-            print(
-                f"  ✅ {city_obj.name} | {temp}°C | opady: {precipitation} mm | "
-                f"wiatr: {wind_speed} m/s | wilgotność: {relative_humidity}%"  # ZAKTUALIZOWANA WIADOMOŚĆ
+            logger.info(
+                "  ✅ %s | %.1f°C | opady: %.1f mm | wiatr: %.1f m/s | wilgotność: %.1f%%",
+                city_obj.name, temp, precipitation, wind_speed, relative_humidity
             )
 
         except IntegrityError:
-            print(f"  ❌ Błąd integralności danych dla {city_obj.name}.")
+            logger.warning("  ❌ Błąd integralności danych dla %s. Prawdopodobnie duplikat.", city_obj.name)
+        except Exception as e:
+            logger.error("  ❌ Nieoczekiwany błąd pobierania danych dla %s: %s", city_obj.name, e)
 
-    print("--- Zakończono pobieranie danych. ---")
+    logger.info("--- Zakończono pobieranie danych. ---")
 
-# Aby uruchomić tę funkcję, użyj Django Shell:
-# python manage.py shell
-# >>> from pogoda.utils import fetch_and_save_weather_data
-# >>> fetch_and_save_weather_data()
 
 def fetch_and_save_historical_weather_monthly_requests(city, start_date, end_date):
     """
@@ -119,8 +115,9 @@ def fetch_and_save_historical_weather_monthly_requests(city, start_date, end_dat
             wind = daily.get("windspeed_10m_max", [])
 
             if not dates:
-                print(f"❌ Brak danych dla {city.name} od {current_date} do {month_end}")
+                logger.warning("❌ Brak danych historycznych dla %s od %s do %s", city.name, current_date, month_end)
             else:
+                # Obliczenia średnich
                 temps = [(temps_max[i] + temps_min[i]) / 2 for i in range(len(dates))]
                 avg_temp = sum(temps) / len(temps)
                 avg_precipitation = sum(precip) / len(dates)
@@ -132,14 +129,21 @@ def fetch_and_save_historical_weather_monthly_requests(city, start_date, end_dat
                         temperature=avg_temp,
                         date=datetime(current_date.year, current_date.month, 1).date(),
                         precipitation=avg_precipitation,
+                        # Uwaga: brak wilgotności w kodzie historycznym - pozostawiam zgodnie z oryginałem
                         wind_speed=avg_wind
                     )
-                    print(f"✅ Zapisano {city.name} - {current_date.year}-{current_date.month}: {avg_temp:.2f}°C")
+                    logger.info("✅ Zapisano %s - %s-%s: %.2f°C", city.name, current_date.year, current_date.month,
+                                avg_temp)
                 except IntegrityError:
-                    print(f"❌ Rekord już istnieje: {city.name} - {current_date.year}-{current_date.month}")
+                    logger.warning("❌ Rekord historyczny już istnieje: %s - %s-%s", city.name, current_date.year,
+                                   current_date.month)
 
+        except requests.exceptions.RequestException as e:
+            logger.error("❌ Błąd żądania API dla %s (historyczne) od %s do %s: %s", city.name, current_date, month_end,
+                         e)
         except Exception as e:
-            print(f"❌ Błąd dla {city.name} od {current_date} do {month_end}: {e}")
+            logger.error("❌ Nieoczekiwany błąd dla %s (historyczne) od %s do %s: %s", city.name, current_date,
+                         month_end, e)
 
         # Przechodzimy do następnego miesiąca
         if current_date.month == 12:
@@ -147,13 +151,15 @@ def fetch_and_save_historical_weather_monthly_requests(city, start_date, end_dat
         else:
             current_date = datetime(current_date.year, current_date.month + 1, 1).date()
 
+
 def fetch_hourly_forecast(city, hours=48):
     """
     Pobiera prognozę godzinową dla danego miasta od aktualnej godziny.
+    Zwraca listę słowników z danymi godzinowymi.
     """
-    import requests
+    # Używamy requests (standardowej biblioteki) zamiast openmeteo_requests,
+    # tak jak w oryginalnym kodzie.
 
-    # Start od aktualnej godziny w formacie ISO
     start_time = datetime.now(pytz.timezone("Europe/Warsaw")).replace(minute=0, second=0, microsecond=0)
     end_time = start_time + timedelta(hours=hours)
 
@@ -164,8 +170,10 @@ def fetch_hourly_forecast(city, hours=48):
         "longitude": city.longitude,
         "hourly": "temperature_2m,precipitation,wind_speed_10m,relative_humidity_2m",
         "timezone": "Europe/Warsaw",
-        "start": start_time.strftime("%Y-%m-%dT%H:%M"),
-        "end": end_time.strftime("%Y-%m-%dT%H:%M"),
+        "start_date": start_time.strftime("%Y-%m-%d"),  # Zmieniono 'start' na 'start_date' w zapytaniu API Open-Meteo
+        "end_date": end_time.strftime("%Y-%m-%d"),  # Zmieniono 'end' na 'end_date'
+        "time_start": start_time.strftime("%Y-%m-%dT%H:00"),  # Dodano precyzyjne limity godzinowe
+        "time_end": end_time.strftime("%Y-%m-%dT%H:00"),
     }
 
     try:
@@ -182,6 +190,10 @@ def fetch_hourly_forecast(city, hours=48):
 
         forecast_data = []
         for i in range(len(times)):
+            # Ograniczenie do żądanej liczby godzin (API może zwrócić więcej)
+            if i >= hours:
+                break
+
             forecast_data.append({
                 "time": times[i],
                 "temperature": temperatures[i],
@@ -192,41 +204,13 @@ def fetch_hourly_forecast(city, hours=48):
 
         return forecast_data
 
+    except requests.exceptions.RequestException as e:
+        logger.error("❌ Błąd żądania API dla prognozy dla %s: %s", city.name, e)
+        # Propagujemy błąd, aby widok mógł zwrócić 500
+        raise Exception(f"Błąd API: {e}")
     except Exception as e:
-        print(f"❌ Błąd pobierania prognozy dla {city.name}: {e}")
-        return []
-
-def get_activity_recommendation(hourly_forecast):
-    """
-    Analizuje prognozę godzinową i generuje proste zalecenie dotyczące aktywności.
-    Reguły: jeśli wiatr > 8 m/s LUB opady > 0.5 mm, uznajemy to za "złą" godzinę.
-    """
-    if not hourly_forecast:
-        return "Brak prognozy, nie można wydać zalecenia."
-
-    # Liczba godzin, w których występuje zła pogoda
-    bad_weather_hours = 0
-    total_hours = len(hourly_forecast)
-
-    # Progi dla złej pogody
-    PRECIPITATION_THRESHOLD = 0.5  # mm/h
-    WIND_THRESHOLD = 9             # m/s
-
-    for hour in hourly_forecast:
-        precip = hour.get('precipitation', 0)
-        wind = hour.get('wind_speed', 0)
-
-        if precip > PRECIPITATION_THRESHOLD or wind > WIND_THRESHOLD:
-            bad_weather_hours += 1
-
-    # Reguły decyzyjne oparte na odsetku "złych" godzin
-    if bad_weather_hours >= total_hours * 0.75:
-        return "⚠️ WARUNKI NIEKORZYSTNE: Zalecamy pozostanie w domu (silny wiatr lub deszcz)."
-    elif bad_weather_hours >= total_hours * 0.35:
-        return "☔ OSTRZEŻENIE: Możliwe opady lub wiatr w prognozie. Warto mieć przy sobie kurtkę przeciwdeszczową."
-    else:
-        return "✅ DOBRE WARUNKI: Można planować aktywność na zewnątrz."
-
+        logger.error("❌ Nieoczekiwany błąd pobierania prognozy dla %s: %s", city.name, e)
+        raise e
 
 def calculate_perceived_temp(temp, humidity, wind_speed):
     """
@@ -252,3 +236,43 @@ def calculate_perceived_temp(temp, humidity, wind_speed):
         return temp + humidity_factor
 
     return temp
+
+
+def generate_weather_recommendation(hourly_data):
+    """
+    Analizuje dane godzinowe i zwraca tekstową rekomendację (string).
+    Bierzemy pod uwagę np. pierwsze 12 godzin prognozy.
+    """
+    if not hourly_data:
+        return "Brak danych do wygenerowania rekomendacji."
+
+    # Analizujemy np. najbliższe 12 godzin (lub mniej, jeśli danych jest mniej)
+    check_range = hourly_data[:12]
+
+    will_rain = any(h['precipitation'] > 0.0 for h in check_range)
+    # Przyjmijmy, że silny wiatr to > 10 m/s (~36 km/h)
+    strong_wind = any(h['wind_speed'] > 10.0 for h in check_range)
+
+    temps = [h['temperature'] for h in check_range]
+    min_temp = min(temps) if temps else 0
+    max_temp = max(temps) if temps else 0
+
+    recs = []
+
+    if will_rain:
+        recs.append("☔ Weź parasol, zapowiadane są opady.")
+
+    if strong_wind:
+        recs.append("💨 Uważaj na silny wiatr, może wpływać na rozgrywkę w plenerze!")
+
+    if min_temp < 0:
+        recs.append("❄️ Ubierz się ciepło, mróz na zewnątrz.")
+    elif max_temp > 25:
+        recs.append("☀️ Jest gorąco! Pamiętaj o nawodnieniu i chłodzeniu PC.")
+    elif 10 <= max_temp <= 20 and not will_rain and not strong_wind:
+        recs.append("🎮 Idealna pogoda na spacer... lub dłuższą sesję gamingową przy otwartym oknie.")
+
+    if not recs:
+        return "Pogoda wygląda na stabilną. Dobrego dnia!"
+
+    return " ".join(recs)

@@ -1,19 +1,15 @@
-# pogoda/urls.py (Używa widoków z DRF)
+
 from django.urls import path
 
-# Importujemy klasy widoków z pogoda/views.py
+
 from .views import (
-    LatestWeatherListAPI,  # Zastępuje latest_weather_list_api
-    RefreshWeatherAPI,  # Zastępuje refresh_weather_api
-    CityDetailAPI, # Zastępuje city_detail_api
+    LatestWeatherListAPI,
+    RefreshWeatherAPI,
+    CityDetailAPI,
     HourlyForecastAPI,
 )
 
 urlpatterns = [
-    # USUNIĘCIE: Stary widok TemplateView nie jest już potrzebny,
-    # ponieważ aplikacja React przejmuje routing frontendu.
-    # path('', TemplateView.as_view(template_name='index.html'), name='home'),
-
     # API 1: Lista aktualnej pogody (z bazy)
     # Używa: LatestWeatherListAPI.as_view()
     path('api/pogoda/', LatestWeatherListAPI.as_view(), name='api_weather_list'),

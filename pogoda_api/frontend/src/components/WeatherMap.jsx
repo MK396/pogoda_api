@@ -1,24 +1,72 @@
-// frontend/src/components/WeatherMap.jsx
-import React from 'react';
+import React, { memo } from 'react';
 import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
-// NOWY IMPORT
 import { Link } from 'react-router-dom';
 
-const WeatherMap = ({ data }) => {
-    // Domyślne współrzędne środka Polski (Warszawa)
-    const defaultCenter = [52.2297, 21.0122];
+// --- STAŁE KONFIGURACYJNE ---
+const MAP_CONFIG = {
+    DEFAULT_CENTER: [52.2297, 21.0122], // Warszawa
+    DEFAULT_ZOOM: 6.4,
+    TILE_URL: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+    ATTRIBUTION: '&copy; <a href="http://osm.org/copyright">OpenStreetMap</a> contributors'
+};
+
+// --- KOMPONENTY POMOCNICZE ---
+
+// Wydzielony komponent zawartości dymka - czyściej i łatwiej zarządzać stylami
+const CityMarkerPopup = ({ city }) => {
+    const { city_name, temperature, relative_humidity, wind_speed } = city;
 
     return (
-        <div id="map-container">
+        <div style={{ textAlign: 'center', minWidth: '140px' }}>
+            <h3 style={{ margin: '0 0 8px 0', fontSize: '1.1rem', color: '#333' }}>
+                {city_name}
+            </h3>
+
+            <div style={{ fontSize: '0.95rem', lineHeight: '1.5', color: '#555' }}>
+                <div>Temp: <strong>{temperature?.toFixed(1) ?? '-'}°C</strong></div>
+                <div>Wilg: {relative_humidity?.toFixed(0) ?? '-'}%</div>
+                <div>Wiatr: {wind_speed?.toFixed(1) ?? '-'} m/s</div>
+            </div>
+
+            <hr style={{ margin: '10px 0', border: '0', borderTop: '1px solid #eee' }} />
+
+            <Link
+                to={`/pogoda/${encodeURIComponent(city_name)}`}
+                style={{
+                    color: '#007bff',
+                    fontWeight: 'bold',
+                    textDecoration: 'none',
+                    fontSize: '0.9rem'
+                }}
+            >
+                Zobacz szczegóły &rarr;
+            </Link>
+        </div>
+    );
+};
+
+// --- GŁÓWNY KOMPONENT ---
+
+const WeatherMap = ({ data }) => {
+    return (
+        // Dodano stylowanie kontenera, aby pasował do reszty UI (zaokrąglenia, cień)
+        <div id="map-container" style={{
+            height: '666px',
+            width: '100%',
+            borderRadius: '12px',
+            overflow: 'hidden',
+            boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+            border: '3px solid #e0e0e0'
+        }}>
             <MapContainer
-                center={defaultCenter}
-                zoom={6}
-                style={{ height: '500px', width: '100%' }}
+                center={MAP_CONFIG.DEFAULT_CENTER}
+                zoom={MAP_CONFIG.DEFAULT_ZOOM}
+                style={{ height: '100%', width: '100%' }}
                 scrollWheelZoom={false}
             >
                 <TileLayer
-                    url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                    attribution='&copy; <a href="http://osm.org/copyright">OpenStreetMap</a> contributors'
+                    url={MAP_CONFIG.TILE_URL}
+                    attribution={MAP_CONFIG.ATTRIBUTION}
                 />
 
                 {data.map((city) => (
@@ -27,24 +75,7 @@ const WeatherMap = ({ data }) => {
                         position={[city.latitude, city.longitude]}
                     >
                         <Popup>
-                            <div style={{ textAlign: 'center' }}>
-                                <h3>{city.city_name}</h3>
-                                <p>Temperatura: <strong>{city.temperature.toFixed(1)}°C</strong></p>
-                                {/* Pamiętamy o dodanych wcześniej polach */}
-                                <p>Wilgotność: {city.relative_humidity.toFixed(0)}%</p>
-                                <p>Wiatr: {city.wind_speed.toFixed(1)} m/s</p>
-
-                                <hr style={{ margin: '8px 0' }} />
-
-                                {/* NOWY ODNOŚNIK */}
-                                {/* Używamy encodeURIComponent, aby nazwy miast ze spacjami były poprawne w URL */}
-                                <Link
-                                    to={`/pogoda/${encodeURIComponent(city.city_name)}`}
-                                    style={{ color: '#007bff', fontWeight: 'bold', textDecoration: 'none' }}
-                                >
-                                    Zobacz szczegóły &rarr;
-                                </Link>
-                            </div>
+                            <CityMarkerPopup city={city} />
                         </Popup>
                     </Marker>
                 ))}
@@ -53,4 +84,5 @@ const WeatherMap = ({ data }) => {
     );
 };
 
-export default WeatherMap;
+// Używamy memo, aby mapa nie przerysowywała się niepotrzebnie, jeśli dane się nie zmieniły
+export default memo(WeatherMap);

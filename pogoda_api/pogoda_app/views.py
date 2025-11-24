@@ -2,27 +2,28 @@
 from rest_framework import views, generics, status
 from rest_framework.response import Response
 from django.db.models import OuterRef, Subquery
-from django.shortcuts import get_object_or_404  # Użyjemy tego, zamiast generics.get_object_or_404
+from django.shortcuts import get_object_or_404
+
+# Używamy standardowego logowania zamiast polegania na print z utils.py
+import logging
 
 from .models import WeatherData, City
 from .serializers import CurrentWeatherSerializer, CityHistorySerializer
-from .utils import fetch_and_save_weather_data, fetch_hourly_forecast, get_activity_recommendation, \
-    calculate_perceived_temp
+from .utils import fetch_and_save_weather_data, fetch_hourly_forecast, generate_weather_recommendation
 
-
-# from .utils import fetch_and_save_weather_data # Zakładamy, że to działa
+logger = logging.getLogger(__name__)
 
 # ----------------------------------------------------------------------
-# LOGIKA POBIERANIA NAJNOWSZYCH DANYCH
+# LOGIKA POBIERANIA NAJNOWSZYCH DANYCH (DRY)
 # ----------------------------------------------------------------------
 
 def get_latest_weather_queryset():
     """
-    Wspólna logika do pobrania NAJNOWSZYCH odczytów dla każdego miasta.
+    Zwraca queryset zawierający tylko najnowszy odczyt WeatherData dla każdego miasta.
     """
     # Subquery: najnowszy timestamp dla każdego miasta
     latest_timestamp = WeatherData.objects.filter(
-        city=OuterRef("city")  # Zmieniono na "city" zamiast "city_id" dla czystości
+        city=OuterRef("city")
     ).order_by("-timestamp").values("timestamp")[:1]
 
     # Zwracamy rekordy, których timestamp równa się najnowszemu
@@ -56,12 +57,16 @@ class RefreshWeatherAPI(views.APIView):
 
     def get(self, request):
         # 1. Pobieramy i zapisujemy nowe dane z API
-        # Pamiętaj, aby zaimportować i upewnić się, że to działa
-        # fetch_and_save_weather_data()
         try:
+            # Logika operacji jest teraz zawarta w utils.py i używa loggera
             fetch_and_save_weather_data()
-        except ValueError as e:
-            print(f"Błąd podczas pobierania danych z zewnętrznego API: {e}")
+        except Exception as e:
+            logger.error("Błąd krytyczny podczas pobierania danych z zewnętrznego API: %s", e)
+            return Response(
+                {"error": "Wystąpił błąd serwera podczas odświeżania danych pogodowych."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
         # 2. Pobieramy zaktualizowany queryset
         latest_weather_data = get_latest_weather_queryset()
 
@@ -77,31 +82,23 @@ class RefreshWeatherAPI(views.APIView):
 class CityDetailAPI(generics.RetrieveAPIView):
     """
     Zwraca dane historyczne konkretnego miasta (JSON).
-    Używa lookup_field='name' i customowego get_object do wyszukiwania iexact.
+    Wyszukuje miasto bez uwzględniania wielkości liter (iexact).
     """
     serializer_class = CityHistorySerializer
     queryset = City.objects.all()
 
-    # 1. Ustawiamy lookup_field na pole modelu, którego używamy do wyszukiwania
+    # Ustawiamy klucze do wyszukiwania
     lookup_field = 'name'
-    # 2. Ustawiamy klucz URL, którego użyliśmy w urls.py
     lookup_url_kwarg = 'city_name'
 
     def get_object(self):
-        # Pobieramy wartość z URL
         city_name = self.kwargs.get(self.lookup_url_kwarg)
 
-        # Wyszukujemy obiekt City za pomocą name__iexact (bez uwzględniania wielkości liter)
-        # i automatycznie obsługujemy błąd 404, jeśli nie znajdzie miasta.
+        # Używamy get_object_or_404 do wyszukiwania i obsługi braku miasta
         obj = get_object_or_404(
             self.get_queryset(),
             name__iexact=city_name
         )
-
-        # Opcjonalnie: optymalizacja historii
-        # Prefetching danych historycznych dla tego konkretnego miasta
-        # obj = obj.prefetch_related('weather_readings')
-
         return obj
 
 # ----------------------------------------------------------------------
@@ -110,14 +107,13 @@ class CityDetailAPI(generics.RetrieveAPIView):
 
 class HourlyForecastAPI(views.APIView):
     """
-    Zwraca prognozę godzinową dla danego miasta (domyślnie 48 godzin) wraz z obliczoną temperaturą odczuwalną.
+    Zwraca prognozę godzinową dla danego miasta (domyślnie 48 godzin).
+    Oraz REKOMENDACJĘ (AI/Algorytm).
     """
 
     def get(self, request, city_name):
-        # 1. Pobranie obiektu miasta lub 404
         city = get_object_or_404(City, name__iexact=city_name)
 
-        # 2. Odczyt parametru 'hours' z zapytania GET, domyślnie 48
         hours_param = request.query_params.get("hours", 48)
         try:
             hours = int(hours_param)
@@ -125,42 +121,76 @@ class HourlyForecastAPI(views.APIView):
                 raise ValueError
         except ValueError:
             return Response(
-                {"error": f"Niepoprawny parametr 'hours': {hours_param}. Podaj liczbę całkowitą większą niż 0."},
+                {"error": f"Niepoprawny parametr 'hours': {hours_param}."},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # 3. Pobranie prognozy
         try:
+            # 1. Pobieramy prognozę (lista słowników)
             forecast = fetch_hourly_forecast(city, hours=hours)
+
+            # 2. Generujemy rekomendację na podstawie tej prognozy
+            recommendation_text = generate_weather_recommendation(forecast)
+
+            # 3. Zwracamy wszystko w JSON (Wewnątrz try, aby zmienna była widoczna)
+            return Response(
+                {
+                    "city": city.name,
+                    "hours": hours,
+                    "hourly": forecast,
+                    "recommendation": recommendation_text
+                },
+                status=status.HTTP_200_OK
+            )
+
         except Exception as e:
             return Response(
                 {"error": f"Błąd pobierania prognozy: {str(e)}"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
-        # 4. DODANIE OBLICZEŃ TEMPERATURY ODCZUWALNEJ do każdego punktu prognozy
-        processed_forecast = []
-        for hour_data in forecast:
-            temp = hour_data.get('temperature')
-            humidity = hour_data.get('relative_humidity')
-            wind = hour_data.get('wind_speed')
 
-            perceived_temp = calculate_perceived_temp(temp, humidity, wind)
 
-            # Wstawienie nowo obliczonej wartości do słownika
-            hour_data['perceived_temperature'] = perceived_temp
-            processed_forecast.append(hour_data)
+    class HourlyForecastAPI(views.APIView):
+        """
+        Zwraca prognozę godzinową dla danego miasta (domyślnie 48 godzin).
+        Oraz REKOMENDACJĘ (AI/Algorytm).
+        """
 
-        # 5. Generowanie zalecenia (używamy processed_forecast)
-        recommendation = get_activity_recommendation(processed_forecast)
+        def get(self, request, city_name):
+            city = get_object_or_404(City, name__iexact=city_name)
 
-        # 6. Zwrócenie danych
-        return Response(
-            {
-                "city": city.name,
-                "hours": hours,
-                "hourly": processed_forecast,  # Zmieniono na processed_forecast
-                "recommendation": recommendation
-            },
-            status=status.HTTP_200_OK
-        )
+            hours_param = request.query_params.get("hours", 48)
+            try:
+                hours = int(hours_param)
+                if hours <= 0:
+                    raise ValueError
+            except ValueError:
+                return Response(
+                    {"error": f"Niepoprawny parametr 'hours'."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            try:
+                # 1. Pobieramy prognozę (lista słowników)
+                forecast = fetch_hourly_forecast(city, hours=hours)
+
+                # 2. Generujemy rekomendację na podstawie tej prognozy
+                recommendation_text = generate_weather_recommendation(forecast)
+
+            except Exception as e:
+                return Response(
+                    {"error": f"Błąd pobierania prognozy: {str(e)}"},
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
+
+            # 3. Zwracamy wszystko w JSON
+            return Response(
+                {
+                    "city": city.name,
+                    "hours": hours,
+                    "hourly": forecast,
+                    "recommendation": recommendation_text  # <--- PRZYWRÓCONE POLE
+                },
+                status=status.HTTP_200_OK
+            )

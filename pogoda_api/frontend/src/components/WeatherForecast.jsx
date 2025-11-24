@@ -1,34 +1,27 @@
-import React, { useState, useEffect } from "react";
+// frontend/src/components/WeatherForecast.jsx
+import React, { useMemo } from "react";
 import {
-    LineChart,
-    Line,
-    XAxis,
-    YAxis,
-    Tooltip,
-    Legend,
-    CartesianGrid,
-    ResponsiveContainer
+    LineChart, Line, XAxis, YAxis, Tooltip, Legend, CartesianGrid, ResponsiveContainer
 } from "recharts";
+import { useCityForecast } from "../hooks/useWeather";
 
-
-
+// --- KOMPONENTY POMOCNICZE ---
 
 const CustomTooltip = ({ active, payload, label, unit }) => {
     if (active && payload && payload.length) {
         const dataPoint = payload[0];
-
         return (
             <div style={{
-                backgroundColor: 'rgba(255, 255, 255, 0.9)',
+                backgroundColor: 'rgba(255, 255, 255, 0.95)',
                 padding: '10px',
                 border: '1px solid #ccc',
                 color: '#333',
-                fontSize: '14px',
-                lineHeight: '1.4'
+                fontSize: '14px'
             }}>
-                <p style={{ margin: '0 0 5px 0', fontWeight: 'bold' }}>{`Data i godzina: ${label}`}</p>
-
-                <p style={{ margin: 0 }}>{`${dataPoint.name}: ${dataPoint.value.toFixed(1)} ${unit}`}</p>
+                <p style={{ margin: '0 0 5px 0', fontWeight: 'bold' }}>{label}</p>
+                <p style={{ margin: 0 }}>
+                    {dataPoint.name}: <strong>{dataPoint.value.toFixed(1)} {unit}</strong>
+                </p>
             </div>
         );
     }
@@ -37,43 +30,37 @@ const CustomTooltip = ({ active, payload, label, unit }) => {
 
 const ForecastChart = ({ data, dataKey, name, color, unit }) => (
     <div style={{
-        width: '50%',
-        minWidth: '400px',
-        height: 350,
-        margin: '10px',
-        padding: '10px',
-        border: '1px solid #ddd',
-        display: 'flex',
-        flexDirection: 'column',
-        boxSizing: 'border-box'
+        width: '100%',
+        height: 300,
+        marginBottom: '30px',
     }}>
-        <h3 style={{ margin: '0 0 5px 0' }}>{name}</h3>
-
-        <div style={{ flex: 1, minHeight: 0 }}>
-            <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={data} margin={{ top: 5, right: 20, left: 20, bottom: 40 }}>
-                    <CartesianGrid strokeDasharray="3 3" />
-
+        <h3 style={{ margin: '0 0 10px 0', fontSize: '1.1rem' }}>{name}</h3>
+        <div style={{ width: '100%', height: '100%' }}>
+            <ResponsiveContainer>
+                <LineChart data={data} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
                     <XAxis
                         dataKey="label"
                         angle={-45}
                         textAnchor="end"
-                        interval={Math.floor(data.length / 5)}
-                        height={50}
+                        interval="preserveStartEnd"
+                        height={60}
+                        tick={{ fontSize: 12 }}
                     />
-
-                    <YAxis label={{ value: unit, angle: -90, position: 'insideLeft' }} />
-
+                    <YAxis
+                        label={{ value: unit, angle: -90, position: 'insideLeft' }}
+                        tick={{ fontSize: 12 }}
+                    />
                     <Tooltip content={<CustomTooltip unit={unit} />} />
-
-                    <Legend />
+                    <Legend verticalAlign="top" height={36} />
                     <Line
                         type="monotone"
                         dataKey={dataKey}
                         name={name}
                         stroke={color}
                         dot={false}
-                        strokeWidth={2}
+                        strokeWidth={3}
+                        activeDot={{ r: 6 }}
                     />
                 </LineChart>
             </ResponsiveContainer>
@@ -81,146 +68,111 @@ const ForecastChart = ({ data, dataKey, name, color, unit }) => (
     </div>
 );
 
+// --- GŁÓWNY KOMPONENT ---
 
-const WeatherForecast = ({ city, latestReading }) => { // DODANO latestReading
-    const [data, setData] = useState(null);
-    const [loading, setLoading] = useState(false);
-    const [recommendation, setRecommendation] = useState(null);
+const WeatherForecast = ({ city, latestReading }) => {
+    const { forecastData, loading, error } = useCityForecast(city);
 
-    
+    const chartData = useMemo(() => {
+        if (!forecastData || !forecastData.hourly) return [];
 
-    const fetchForecast = async (selectedCity) => {
-        if (!selectedCity) return;
-        setLoading(true);
-        setData(null);
-        setRecommendation(null); // Reset rekomendacji
-
-        try {
-            const encodedCity = encodeURIComponent(selectedCity);
-
-            const res = await fetch(`http://localhost:8000/api/pogoda/forecast/${encodedCity}/`);
-
-            if (!res.ok) {
-                throw new Error(`HTTP error! status: ${res.status}`);
-            }
-
-            const json = await res.json();
-            setData(json.hourly);
-            setRecommendation(json.recommendation);
-
-        } catch (error) {
-            console.error("Błąd pobierania prognozy:", error);
-            alert("Nie udało się pobrać prognozy.");
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    useEffect(() => {
-        if (city) {
-            fetchForecast(city);
-        }
-    }, [city]);
-
-    const filteredData = data
-        ? data
-            .filter((hour) => {
-                // Ustawiamy filtr na całą prognozę, ponieważ "Aktualna Pogoda" jest pobierana osobno.
-                const hourTime = new Date(hour.time);
-                const now = new Date();
-                return hourTime >= now;
-            })
+        const now = new Date();
+        return forecastData.hourly
+            .filter((hour) => new Date(hour.time) >= now)
             .slice(0, 49)
             .map((h) => ({
                 ...h,
                 label: new Date(h.time).toLocaleString('pl-PL', {
-                    year: 'numeric',
-                    month: "2-digit",
                     day: "2-digit",
+                    month: "2-digit",
                     hour: "2-digit",
                     minute: "2-digit",
                 }),
-            }))
-        : [];
+            }));
+    }, [forecastData]);
 
+    if (loading && !chartData.length) return <p>Ładowanie prognozy...</p>;
+    if (error) return <p style={{ color: 'red' }}>Błąd prognozy: {error}</p>;
 
     return (
-        <div id="weather-forecast" style={{ marginTop: "30px" }}>
-            <h2>Prognoza pogody dla **{city}**</h2>
+        // DODANO: padding: '0 20px' i boxSizing: 'border-box' dla marginesów bocznych
+        <div id="weather-forecast" style={{
+            marginTop: "30px",
+            width: "100%",
+            padding: "0 20px",
+            boxSizing: "border-box"
+        }}>
 
-            {/* REKOMENDACJA bez zmian */}
-            {recommendation && (
+            {/* SEKCJA 1: REKOMENDACJA AI */}
+            {forecastData?.recommendation && (
                 <div style={{
-                    padding: '10px',
+                    padding: '15px',
                     background: '#e0f7fa',
                     borderLeft: '5px solid #00bcd4',
-                    marginBottom: '20px',
-                    fontWeight: 'bold',
-                    color: '#333'
+                    marginBottom: '25px',
+                    borderRadius: '4px',
+                    color: '#006064'
                 }}>
-                    {recommendation}
+                    <strong>Wskazówka:</strong> {forecastData.recommendation}
                 </div>
             )}
 
-
+            {/* SEKCJA 2: AKTUALNY ODCZYT */}
             {latestReading && (
                 <div style={{
-                    marginBottom: '30px',
-                    padding: '15px',
-                    border: '1px solid #ccc',
-                    borderRadius: '8px',
-                    backgroundColor: '#f9f9f9',
-                    color: '#333'
+                    marginBottom: '40px',
+                    paddingBottom: '20px',
+                    borderBottom: '1px solid #ccc'
                 }}>
-
-                    <h3 style={{ margin: '0 0 10px 0', color: '#0056b3' }}>
-                        Aktualna Pogoda ({new Date(latestReading.last_updated).toLocaleString('pl-PL')})
+                    <h3 style={{ margin: '0 0 15px 0' }}>
+                        Aktualne warunki <small>({new Date(latestReading.last_updated).toLocaleString('pl-PL')})</small>
                     </h3>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '20px' }}>
-                        <p style={{ margin: 0 }}>
-                            Temperatura:{latestReading.temperature.toFixed(1)}°C**
-                        </p>
-                        <p style={{ margin: 0 }}>
 
-                            Odczuwalna:{(latestReading.perceived_temperature !== null ? latestReading.perceived_temperature : latestReading.temperature).toFixed(1)}°C**
-                        </p>
-                        <p style={{ margin: 0 }}>
-                            Wiatr: {latestReading.wind_speed.toFixed(1)} m/s
-                        </p>
-                        <p style={{ margin: 0 }}>
-                            Wilgotność: {latestReading.relative_humidity.toFixed(0)}%
-                        </p>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '30px', fontSize: '1.1rem' }}>
+                        <div>
+                            Temperatura: <strong>{latestReading.temperature.toFixed(1)}°C</strong>
+                        </div>
+                        <div>
+                            Odczuwalna: <strong>
+                            {(latestReading.perceived_temperature ?? latestReading.temperature).toFixed(1)}°C
+                        </strong>
+                        </div>
+                        <div>
+                            Wiatr: <strong>{latestReading.wind_speed.toFixed(1)} m/s</strong>
+                        </div>
+                        <div>
+                            Wilgotność: <strong>{latestReading.relative_humidity.toFixed(0)}%</strong>
+                        </div>
                     </div>
                 </div>
             )}
 
-            {/* KONTENER DLA WYKRESÓW (bez zmian) */}
-            {filteredData.length > 0 ? (
-                <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center' }}>
-
+            {/* SEKCJA 3: WYKRESY */}
+            {chartData.length > 0 ? (
+                <div style={{ width: '100%' }}>
                     <ForecastChart
-                        data={filteredData}
+                        data={chartData}
                         dataKey="temperature"
                         name="Temperatura"
                         color="#ff0000"
                         unit="°C"
                     />
                     <ForecastChart
-                        data={filteredData}
+                        data={chartData}
                         dataKey="precipitation"
                         name="Opady"
                         color="#0088fe"
                         unit="mm"
                     />
                     <ForecastChart
-                        data={filteredData}
+                        data={chartData}
                         dataKey="wind_speed"
-                        name="Prędkość Wiatru"
+                        name="Wiatr"
                         color="#00c49f"
                         unit="m/s"
                     />
                     <ForecastChart
-                        data={filteredData}
+                        data={chartData}
                         dataKey="relative_humidity"
                         name="Wilgotność"
                         color="#ffbb2c"
@@ -228,7 +180,7 @@ const WeatherForecast = ({ city, latestReading }) => { // DODANO latestReading
                     />
                 </div>
             ) : (
-                !loading && <p>Brak danych dla prognozy.</p>
+                <p>Brak danych prognozy do wyświetlenia.</p>
             )}
         </div>
     );
