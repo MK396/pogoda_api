@@ -4,7 +4,7 @@ import openmeteo_requests
 from retry_requests import retry
 import requests_cache
 import pytz
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, time
 from calendar import monthrange
 import requests
 from django.db import IntegrityError
@@ -276,3 +276,79 @@ def generate_weather_recommendation(hourly_data):
         return "Pogoda wygląda na stabilną. Dobrego dnia!"
 
     return " ".join(recs)
+
+
+def fetch_and_save_last_30_days(city):
+    """
+    Pobiera dane dzienne z ostatnich 30 dni i zapisuje je do tabeli WeatherData.
+    Ponieważ WeatherData wymaga czasu, ustawiamy godzinę na 12:00 dla każdego dnia.
+    """
+    # Zakres dat: od wczoraj do 30 dni wstecz
+    end_date = datetime.now().date() - timedelta(days=1)
+    start_date = end_date - timedelta(days=29)
+
+    url = "https://archive-api.open-meteo.com/v1/era5"
+
+    params = {
+        "latitude": city.latitude,
+        "longitude": city.longitude,
+        "start_date": start_date.strftime("%Y-%m-%d"),
+        "end_date": end_date.strftime("%Y-%m-%d"),
+        # Pobieramy: temperaturę średnią, sumę opadów, max wiatr
+        # ERA5 Archive ma też relative_humidity_2m_mean (średnią wilgotność)
+        "daily": "temperature_2m_mean,precipitation_sum,wind_speed_10m_max,relative_humidity_2m_mean",
+        "timezone": "Europe/Warsaw"
+    }
+
+    try:
+        r = requests.get(url, params=params, timeout=30)
+        r.raise_for_status()
+        data = r.json()
+        daily = data.get("daily", {})
+
+        dates = daily.get("time", [])
+        temps = daily.get("temperature_2m_mean", [])
+        precip = daily.get("precipitation_sum", [])
+        winds = daily.get("wind_speed_10m_max", [])
+        humid = daily.get("relative_humidity_2m_mean", [])  # Wilgotność
+
+        if not dates:
+            logger.warning(f"Brak danych historycznych dla {city.name}")
+            return False
+
+        # Strefa czasowa (ważne dla DateTimeField)
+        tz = pytz.timezone("Europe/Warsaw")
+
+        for i, date_str in enumerate(dates):
+            # 1. Tworzymy obiekt daty
+            date_obj = datetime.strptime(date_str, "%Y-%m-%d").date()
+
+            # 2. Tworzymy timestamp na godzinę 12:00 tego dnia (aware datetime)
+            naive_datetime = datetime.combine(date_obj, time(12, 0))
+            aware_datetime = tz.localize(naive_datetime)
+
+            # Bezpieczne pobieranie wartości
+            t = temps[i] if i < len(temps) and temps[i] is not None else 0.0
+            p = precip[i] if i < len(precip) and precip[i] is not None else 0.0
+            w = winds[i] if i < len(winds) and winds[i] is not None else 0.0
+            h = humid[i] if i < len(humid) and humid[i] is not None else 50.0  # Domyślna wilgotność jeśli brak
+
+            # 3. Zapisujemy do głównej tabeli WeatherData
+            # Używamy update_or_create, aby nie dublować danych, jeśli klikniesz przycisk 2 razy
+            WeatherData.objects.update_or_create(
+                city=city,
+                timestamp=aware_datetime,
+                defaults={
+                    "temperature": t,
+                    "precipitation": p,
+                    "wind_speed": w,
+                    "relative_humidity": h
+                }
+            )
+
+        logger.info(f"✅ Zaktualizowano historię (WeatherData) 30 dni dla: {city.name}")
+        return True
+
+    except Exception as e:
+        logger.error(f"❌ Błąd pobierania historii 30 dni dla {city.name}: {e}")
+        raise e

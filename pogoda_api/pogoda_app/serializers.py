@@ -6,21 +6,15 @@ from .utils import calculate_perceived_temp
 
 # 1. Serializer dla pojedynczego rekordu historycznego/detalu
 class WeatherDetailSerializer(serializers.ModelSerializer):
-    """
-    Używany do serializacji pełnych danych historycznych dla JSON History,
-    które zawierają opady i wiatr.
-    """
-
     class Meta:
         model = WeatherData
         fields = (
             'temperature',
             'timestamp',
-            'precipitation',  # <--- DODANO
+            'precipitation',
             'wind_speed',
-            'relative_humidity'# <--- DODANO
+            'relative_humidity'
         )
-
 
 # 2. Serializer dla najnowszej pogody (listy miast)
 class CurrentWeatherSerializer(serializers.ModelSerializer):
@@ -68,10 +62,9 @@ class CurrentWeatherSerializer(serializers.ModelSerializer):
 # 3. Serializer dla pełnej historii miasta (detal)
 class CityHistorySerializer(serializers.ModelSerializer):
     """
-    Serializuje szczegóły miasta z zagnieżdżoną listą pełnych odczytów (WeatherData).
+    Serializuje szczegóły miasta z historią pobraną z tabeli WeatherData.
     """
-    # Używamy related_name 'weather_readings' z modelu City (odwołanie do WeatherData).
-    # Zwraca on teraz pełne dane (temp, opady, wiatr) z WeatherDetailSerializer.
+    # source='weather_readings' wskazuje na relację w modelu WeatherData (related_name='weather_readings')
     history = WeatherDetailSerializer(many=True, read_only=True, source='weather_readings')
     city_name = serializers.CharField(source='name')
 

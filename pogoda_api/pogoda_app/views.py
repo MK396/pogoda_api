@@ -1,40 +1,26 @@
-# pogoda/views.py (Używając DRF)
 from rest_framework import views, generics, status
 from rest_framework.response import Response
 from django.db.models import OuterRef, Subquery
 from django.shortcuts import get_object_or_404
-
-# Używamy standardowego logowania zamiast polegania na print z utils.py
 import logging
 
 from .models import WeatherData, City
 from .serializers import CurrentWeatherSerializer, CityHistorySerializer
-from .utils import fetch_and_save_weather_data, fetch_hourly_forecast, generate_weather_recommendation
+from .utils import fetch_and_save_weather_data, fetch_hourly_forecast, generate_weather_recommendation, \
+    fetch_and_save_last_30_days
 
 logger = logging.getLogger(__name__)
 
-# ----------------------------------------------------------------------
-# LOGIKA POBIERANIA NAJNOWSZYCH DANYCH (DRY)
-# ----------------------------------------------------------------------
-
 def get_latest_weather_queryset():
-    """
-    Zwraca queryset zawierający tylko najnowszy odczyt WeatherData dla każdego miasta.
-    """
-    # Subquery: najnowszy timestamp dla każdego miasta
+
     latest_timestamp = WeatherData.objects.filter(
         city=OuterRef("city")
     ).order_by("-timestamp").values("timestamp")[:1]
 
-    # Zwracamy rekordy, których timestamp równa się najnowszemu
     return WeatherData.objects.filter(
         timestamp=Subquery(latest_timestamp)
     ).select_related("city").order_by("city__name")
 
-
-# ----------------------------------------------------------------------
-# Widok 1: /api/pogoda/ (Lista aktualnej pogody)
-# ----------------------------------------------------------------------
 
 class LatestWeatherListAPI(generics.ListAPIView):
     """
@@ -46,9 +32,6 @@ class LatestWeatherListAPI(generics.ListAPIView):
         return get_latest_weather_queryset()
 
 
-# ----------------------------------------------------------------------
-# Widok 2: /api/pogoda/refresh/ (Odświeżanie)
-# ----------------------------------------------------------------------
 
 class RefreshWeatherAPI(views.APIView):
     """
@@ -56,9 +39,7 @@ class RefreshWeatherAPI(views.APIView):
     """
 
     def get(self, request):
-        # 1. Pobieramy i zapisujemy nowe dane z API
         try:
-            # Logika operacji jest teraz zawarta w utils.py i używa loggera
             fetch_and_save_weather_data()
         except Exception as e:
             logger.error("Błąd krytyczny podczas pobierania danych z zewnętrznego API: %s", e)
@@ -67,17 +48,12 @@ class RefreshWeatherAPI(views.APIView):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
-        # 2. Pobieramy zaktualizowany queryset
         latest_weather_data = get_latest_weather_queryset()
 
-        # 3. Serializujemy i zwracamy
         serializer = CurrentWeatherSerializer(latest_weather_data, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
 
-# ----------------------------------------------------------------------
-# Widok 3: /api/pogoda/history/<city_name>/ (Historia)
-# ----------------------------------------------------------------------
 
 class CityDetailAPI(generics.RetrieveAPIView):
     """
@@ -87,7 +63,6 @@ class CityDetailAPI(generics.RetrieveAPIView):
     serializer_class = CityHistorySerializer
     queryset = City.objects.all()
 
-    # Ustawiamy klucze do wyszukiwania
     lookup_field = 'name'
     lookup_url_kwarg = 'city_name'
 
@@ -101,9 +76,6 @@ class CityDetailAPI(generics.RetrieveAPIView):
         )
         return obj
 
-# ----------------------------------------------------------------------
-# Widok 4: /api/pogoda/forecast/<city_name>/ (Prognoza godzinowa)
-# ----------------------------------------------------------------------
 
 class HourlyForecastAPI(views.APIView):
     """
@@ -146,5 +118,27 @@ class HourlyForecastAPI(views.APIView):
         except Exception as e:
             return Response(
                 {"error": f"Błąd pobierania prognozy: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+class FetchCityHistoryAPI(views.APIView):
+    """
+    Wymusza pobranie historii z ostatnich 30 dni dla podanego miasta
+    i zapisanie jej do bazy danych.
+    """
+
+    def get(self, request, city_name):
+        city = get_object_or_404(City, name__iexact=city_name)
+
+        try:
+            fetch_and_save_last_30_days(city)
+            return Response(
+                {"message": f"Pomyślnie pobrano historię (30 dni) dla miasta: {city.name}"},
+                status=status.HTTP_200_OK
+            )
+        except Exception as e:
+            return Response(
+                {"error": f"Wystąpił błąd: {str(e)}"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )

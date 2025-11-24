@@ -1,6 +1,8 @@
+// src/hooks/useWeather.js
 import { useState, useEffect, useCallback } from 'react';
 import { API_BASE_URL, ENDPOINTS } from '../api/config';
 
+// Generyczna funkcja fetchująca
 const fetchData = async (endpoint) => {
     const response = await fetch(`${API_BASE_URL}${endpoint}`);
     if (response.status === 404) return null;
@@ -10,6 +12,9 @@ const fetchData = async (endpoint) => {
     return response.json();
 };
 
+// --- POPRAWIONY HOOK ---
+// Używamy endpointu REFRESH, aby przy wejściu na stronę główną
+// wymusić pobranie danych z zewnętrznego API (OpenMeteo).
 export const useCurrentWeather = (refreshInterval = 300000) => {
     const [data, setData] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -19,7 +24,9 @@ export const useCurrentWeather = (refreshInterval = 300000) => {
         setLoading(true);
         setError(null);
         try {
-            const result = await fetchData(ENDPOINTS.CURRENT);
+            // ZMIANA: ENDPOINTS.CURRENT -> ENDPOINTS.REFRESH
+            // Dzięki temu dane są odświeżane przy każdym załadowaniu strony głównej
+            const result = await fetchData(ENDPOINTS.REFRESH);
             setData(result || []);
         } catch (err) {
             setError(err.message);
@@ -31,6 +38,7 @@ export const useCurrentWeather = (refreshInterval = 300000) => {
     useEffect(() => {
         fetchWeather();
         if (refreshInterval) {
+            // Automatyczne odświeżanie co X ms (domyślnie 5 min)
             const interval = setInterval(fetchWeather, refreshInterval);
             return () => clearInterval(interval);
         }
@@ -38,6 +46,8 @@ export const useCurrentWeather = (refreshInterval = 300000) => {
 
     return { data, loading, error, refetch: fetchWeather };
 };
+
+// --- POZOSTAŁE HOOKI (BEZ ZMIAN) ---
 
 export const useCityHistory = (city) => {
     const [historyData, setHistoryData] = useState(null);
@@ -52,7 +62,6 @@ export const useCityHistory = (city) => {
             setError(null);
             try {
                 const result = await fetchData(ENDPOINTS.HISTORY(city));
-                // Jeśli 404 (null), ustawiamy pustą historię, zamiast błędu
                 setHistoryData(result || { city_name: city, history: [] });
             } catch (err) {
                 setError(err.message);
@@ -66,8 +75,9 @@ export const useCityHistory = (city) => {
 
     return { historyData, loading, error };
 };
+
 export const useCityForecast = (city) => {
-    // 1. Zmieniamy stan początkowy na obiekt, a nie null/tablicę
+    // Pamiętaj o obsłudze recommendation (obiekt)
     const [forecastData, setForecastData] = useState({ hourly: [], recommendation: null });
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
@@ -78,11 +88,7 @@ export const useCityForecast = (city) => {
         setError(null);
         try {
             const result = await fetchData(ENDPOINTS.FORECAST(selectedCity));
-
-            // 2. KLUCZOWA ZMIANA: Zapisujemy cały wynik (JSON), a nie tylko result.hourly
-            // Backend zwraca teraz: { hourly: [...], recommendation: "Tekst", city: "Nazwa" }
             setForecastData(result || { hourly: [], recommendation: null });
-
         } catch (err) {
             setError(err.message);
         } finally {
@@ -97,6 +103,7 @@ export const useCityForecast = (city) => {
     return { forecastData, loading, error, refetch: () => fetchForecast(city) };
 };
 
+// Hook do pobierania pojedynczego odświeżonego miasta (dla CityDetailPage)
 export const useRefreshedCityWeather = (city) => {
     const [latestReading, setLatestReading] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -109,21 +116,15 @@ export const useRefreshedCityWeather = (city) => {
             setLoading(true);
             setError(null);
             try {
-                // Używamy endpointu REFRESH zgodnie z Twoim wymaganiem
                 const response = await fetch(`${API_BASE_URL}${ENDPOINTS.REFRESH}`);
-
                 if (!response.ok) {
                     throw new Error(`HTTP error! status: ${response.status}`);
                 }
-
                 const allCitiesData = await response.json();
-
-                // Znajdujemy miasto w pobranej liście
                 const matchedCity = allCitiesData.find(item => item.city_name === city);
                 setLatestReading(matchedCity || null);
-
             } catch (err) {
-                console.error("Błąd pobierania aktualnych danych dla detali:", err);
+                console.error("Błąd pobierania danych miasta:", err);
                 setError(err.message);
             } finally {
                 setLoading(false);
