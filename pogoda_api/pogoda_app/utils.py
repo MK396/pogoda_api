@@ -1,16 +1,16 @@
 # pogoda/utils.py
 
-import openmeteo_requests
-from retry_requests import retry
-import requests_cache
-import pytz
-from datetime import datetime, timedelta, time
-from calendar import monthrange
-import requests
-from django.db import IntegrityError
 import logging
+from datetime import datetime, timedelta, time
 
-from .models import City, WeatherData, HistoricalWeatherData
+import openmeteo_requests
+import pytz
+import requests
+import requests_cache
+from django.db import IntegrityError
+from retry_requests import retry
+
+from .models import City, WeatherData
 
 # Konfiguracja loggera
 logger = logging.getLogger(__name__)
@@ -74,82 +74,6 @@ def fetch_and_save_weather_data():
             logger.error("  ❌ Nieoczekiwany błąd pobierania danych dla %s: %s", city_obj.name, e)
 
     logger.info("--- Zakończono pobieranie danych. ---")
-
-
-def fetch_and_save_historical_weather_monthly_requests(city, start_date, end_date):
-    """
-    Pobiera dane historyczne z Open-Meteo przy użyciu requests (JSON),
-    agreguje je miesięcznie i zapisuje do HistoricalWeatherData.
-    """
-    today = datetime.now().date()
-    if end_date > today:
-        end_date = today
-
-    current_date = start_date
-
-    while current_date <= end_date:
-        last_day = monthrange(current_date.year, current_date.month)[1]
-        month_end = min(datetime(current_date.year, current_date.month, last_day).date(), end_date)
-
-        url = "https://archive-api.open-meteo.com/v1/era5"
-        params = {
-            "latitude": city.latitude,
-            "longitude": city.longitude,
-            "start_date": current_date.strftime("%Y-%m-%d"),
-            "end_date": month_end.strftime("%Y-%m-%d"),
-            "daily": "temperature_2m_max,temperature_2m_min,precipitation_sum,windspeed_10m_max",
-            "timezone": "Europe/Warsaw",
-            "format": "json"
-        }
-
-        try:
-            r = requests.get(url, params=params, timeout=30)
-            r.raise_for_status()
-            data = r.json()
-            daily = data.get("daily", {})
-
-            dates = daily.get("time", [])
-            temps_max = daily.get("temperature_2m_max", [])
-            temps_min = daily.get("temperature_2m_min", [])
-            precip = daily.get("precipitation_sum", [])
-            wind = daily.get("windspeed_10m_max", [])
-
-            if not dates:
-                logger.warning("❌ Brak danych historycznych dla %s od %s do %s", city.name, current_date, month_end)
-            else:
-                # Obliczenia średnich
-                temps = [(temps_max[i] + temps_min[i]) / 2 for i in range(len(dates))]
-                avg_temp = sum(temps) / len(temps)
-                avg_precipitation = sum(precip) / len(dates)
-                avg_wind = sum(wind) / len(dates)
-
-                try:
-                    HistoricalWeatherData.objects.create(
-                        city=city,
-                        temperature=avg_temp,
-                        date=datetime(current_date.year, current_date.month, 1).date(),
-                        precipitation=avg_precipitation,
-                        # Uwaga: brak wilgotności w kodzie historycznym - pozostawiam zgodnie z oryginałem
-                        wind_speed=avg_wind
-                    )
-                    logger.info("✅ Zapisano %s - %s-%s: %.2f°C", city.name, current_date.year, current_date.month,
-                                avg_temp)
-                except IntegrityError:
-                    logger.warning("❌ Rekord historyczny już istnieje: %s - %s-%s", city.name, current_date.year,
-                                   current_date.month)
-
-        except requests.exceptions.RequestException as e:
-            logger.error("❌ Błąd żądania API dla %s (historyczne) od %s do %s: %s", city.name, current_date, month_end,
-                         e)
-        except Exception as e:
-            logger.error("❌ Nieoczekiwany błąd dla %s (historyczne) od %s do %s: %s", city.name, current_date,
-                         month_end, e)
-
-        # Przechodzimy do następnego miesiąca
-        if current_date.month == 12:
-            current_date = datetime(current_date.year + 1, 1, 1).date()
-        else:
-            current_date = datetime(current_date.year, current_date.month + 1, 1).date()
 
 
 def fetch_hourly_forecast(city, hours=48):
